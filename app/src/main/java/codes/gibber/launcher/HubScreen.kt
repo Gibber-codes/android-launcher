@@ -50,6 +50,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 /** Gibber Hub, built into the launcher as its second page. */
 @Composable
 fun HubScreen(prefs: Prefs, isShown: Boolean, onGoHome: () -> Unit) {
+    val context = LocalContext.current
     var url by remember { mutableStateOf(normalizeHubUrl(prefs.hubUrl)) }
     var editing by remember { mutableStateOf(url.isBlank()) }
 
@@ -66,7 +67,16 @@ fun HubScreen(prefs: Prefs, isShown: Boolean, onGoHome: () -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text("‹  Home", color = Color.White, fontSize = 16.sp, modifier = Modifier.clickable(onClick = onGoHome))
-            Text("Gibber Hub", color = Color.White, fontSize = 16.sp)
+            Text("Open in Chrome", color = Color.White, fontSize = 16.sp, modifier = Modifier.clickable {
+                if (url.isNotBlank()) {
+                    try {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    } catch (e: Exception) {
+                    }
+                }
+            })
             Text("Address", color = Color.White, fontSize = 16.sp, modifier = Modifier.clickable { editing = true })
         }
 
@@ -124,6 +134,7 @@ private fun HubWebView(url: String, isShown: Boolean, onGoHome: () -> Unit) {
     var progress by remember(url) { mutableIntStateOf(0) }
     var error by remember(url) { mutableStateOf<String?>(null) }
     var pageError by remember(url) { mutableStateOf<String?>(null) }
+    var missing by remember(url) { mutableStateOf<List<String>>(emptyList()) }
 
     // Back steps back inside the hub first, then returns home.
     BackHandler(enabled = isShown) {
@@ -148,6 +159,8 @@ private fun HubWebView(url: String, isShown: Boolean, onGoHome: () -> Unit) {
                     settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                     settings.loadWithOverviewMode = true
                     settings.useWideViewPort = true
+                    // Chrome lays pages out at 100%; a bigger phone font would otherwise stretch the hub's layout.
+                    settings.textZoom = 100
                     webChromeClient = object : WebChromeClient() {
                         override fun onProgressChanged(view: WebView, newProgress: Int) {
                             progress = newProgress
@@ -163,6 +176,7 @@ private fun HubWebView(url: String, isShown: Boolean, onGoHome: () -> Unit) {
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView, pageUrl: String?, favicon: Bitmap?) {
                             error = null
+                            missing = emptyList()
                         }
 
                         override fun onReceivedError(
@@ -182,6 +196,9 @@ private fun HubWebView(url: String, isShown: Boolean, onGoHome: () -> Unit) {
                         ) {
                             if (request.isForMainFrame) {
                                 error = "The hub answered with error ${response.statusCode}"
+                            } else {
+                                val path = request.url.path ?: request.url.toString()
+                                if (!path.endsWith("favicon.ico")) missing = missing + "$path (${response.statusCode})"
                             }
                         }
                     }
@@ -205,7 +222,9 @@ private fun HubWebView(url: String, isShown: Boolean, onGoHome: () -> Unit) {
             )
         }
 
-        val message = error ?: if (progress == 100) pageError else null
+        val missingNote = if (missing.isEmpty()) null
+        else "${missing.size} of the hub's files didn't load, like ${missing.first()}"
+        val message = error ?: if (progress == 100) (missingNote ?: pageError) else null
         if (message != null) {
             Column(
                 Modifier
