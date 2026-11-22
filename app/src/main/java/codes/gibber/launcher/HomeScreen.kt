@@ -37,6 +37,7 @@ fun HomeScreen(
     onFavoritesChange: (List<String>) -> Unit,
     onOpenDrawer: () -> Unit,
     onOpenHub: () -> Unit,
+    resumes: Int,
 ) {
     val context = LocalContext.current
     val byKey = remember(apps) { apps.associateBy { it.key } }
@@ -88,6 +89,7 @@ fun HomeScreen(
                     .clickable(onClick = onOpenDrawer)
                     .padding(vertical = 12.dp),
             )
+            UpdateButton(resumes = resumes)
             Text(
                 "Gibber Hub  ›",
                 color = Color.White,

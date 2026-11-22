@@ -11,14 +11,13 @@ Built with Kotlin and Jetpack Compose. Android 8 or newer.
 
 ## Get it on your phone
 
-**Option A, Android Studio on your PC**
-1. Open this folder in Android Studio and let it sync.
-2. Plug in your phone with USB debugging on, then press Run. Or use Build > Build APK(s) and copy `app/build/outputs/apk/debug/app-debug.apk` to your phone.
+Every push to main builds a new version and posts it on this repo's **Releases** page as `gibber-launcher.apk`.
 
-**Option B, GitHub builds it for you**
-Push this folder to a GitHub repo. The "Build APK" action builds the app on every push; download `gibber-launcher-apk` from the run's page and open it on your phone.
+**First install:** on your phone, open the newest release, tap `gibber-launcher.apk`, and install it. Then press Home and pick **Gibber Launcher** (Settings > Apps > Choose default apps > Home app on Samsung).
 
-Then on the phone: allow installing from that source, install, press Home, and pick **Gibber Launcher** as your home app (Settings > Apps > Default apps > Home app on Samsung).
+**Updates after that:** tap **Update** at the bottom of the home screen. It reads "Update ready" when a newer build is out. The first time, Android asks you to let Gibber Launcher install apps; turn that on, come back and tap Update again.
+
+Every build is signed with the same key (`signing/launcher.p12`, locked with the repo secret `LAUNCHER_KEY_PASSWORD`), so a new version installs right over the old one and keeps your favorites. Without that secret the build still runs but isn't posted as a release.
 
 To go back to Samsung's home screen at any time, pick One UI Home in that same setting.
 

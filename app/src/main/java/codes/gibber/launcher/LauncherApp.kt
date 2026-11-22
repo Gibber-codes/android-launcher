@@ -74,6 +74,7 @@ fun LauncherApp(
                         onFavoritesChange = ::saveFavorites,
                         onOpenDrawer = { drawerOpen = true },
                         onOpenHub = { scope.launch { pager.animateScrollToPage(PAGE_HUB) } },
+                        resumes = resumes,
                     )
                     PAGE_HUB -> HubScreen(
                         prefs = prefs,

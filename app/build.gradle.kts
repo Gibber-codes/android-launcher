@@ -12,13 +12,30 @@ android {
         applicationId = "codes.gibber.launcher"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.3"
+        // Each GitHub build gets the next number, which the in-app Update button compares.
+        val build = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
+        versionCode = build
+        versionName = "0.$build"
+    }
+
+    // One fixed key, so every new version installs over the old one. GitHub's build passes the
+    // key file and its password in; a build on your own PC falls back to the debug key.
+    val keystore = System.getenv("LAUNCHER_KEYSTORE")
+    signingConfigs {
+        if (keystore != null) {
+            create("fixed") {
+                storeFile = file(keystore)
+                storePassword = System.getenv("LAUNCHER_KEY_PASSWORD")
+                keyAlias = "launcher"
+                keyPassword = System.getenv("LAUNCHER_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = if (keystore != null) signingConfigs.getByName("fixed") else signingConfigs.getByName("debug")
         }
     }
     compileOptions {
@@ -30,6 +47,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
