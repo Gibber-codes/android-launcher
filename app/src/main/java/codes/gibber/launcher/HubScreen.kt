@@ -174,6 +174,11 @@ private fun HubWebView(url: String, isShown: Boolean, onGoHome: () -> Unit) {
                         }
                     }
                     webViewClient = object : WebViewClient() {
+                        override fun shouldInterceptRequest(
+                            view: WebView,
+                            request: WebResourceRequest,
+                        ): WebResourceResponse? = LocalhostProxy.intercept(request, url)
+
                         override fun onPageStarted(view: WebView, pageUrl: String?, favicon: Bitmap?) {
                             error = null
                             missing = emptyList()
