@@ -3,6 +3,8 @@ package codes.gibber.launcher
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.os.Build
+import android.view.WindowManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.platform.LocalContext
@@ -33,11 +35,22 @@ fun HideSystemBars() {
         bars.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         hiders++
         bars.hide(WindowInsetsCompat.Type.systemBars())
+        // Let the app draw right up into the strip where the bar was, around the camera hole too.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.attributes = window.attributes.apply {
+                layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
         onDispose {
             hiders--
             if (hiders <= 0) {
                 hiders = 0
                 bars.show(WindowInsetsCompat.Type.systemBars())
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    window.attributes = window.attributes.apply {
+                        layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT
+                    }
+                }
             }
         }
     }

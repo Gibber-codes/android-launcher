@@ -4,6 +4,7 @@ import android.content.pm.ActivityInfo
 import android.widget.Toast
 import androidx.compose.runtime.DisposableEffect
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -38,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -141,6 +143,12 @@ fun NativeHub(hubUrl: String, isShown: Boolean, onGoHome: () -> Unit) {
     ) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                Image(
+                    painter = painterResource(R.drawable.gibbercodes_logo),
+                    contentDescription = "GibberCodes",
+                    modifier = Modifier.size(52.dp),
+                )
+                Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(name ?: "Gibber Hub", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
                     val (dot, words) = when (reached) {
