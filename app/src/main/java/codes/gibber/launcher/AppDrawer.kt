@@ -1,7 +1,6 @@
 package codes.gibber.launcher
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
@@ -19,7 +18,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,7 +28,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
@@ -38,16 +35,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 
-/** A list of apps, A to Z, under a title, with search and an alphabet strip down the right side. */
+/** Every app, A to Z, with search and an alphabet strip down the right side. */
 @Composable
 fun AppDrawer(
-    title: String,
     apps: List<AppEntry>,
     favorites: List<String>,
     onFavoritesChange: (List<String>) -> Unit,
     onClose: () -> Unit,
-    emptyText: String = "No apps here yet.",
-    moreActions: (AppEntry) -> List<RowAction> = { emptyList() },
+    onAppsChanged: () -> Unit = {},
 ) {
     val context = LocalContext.current
     var query by remember { mutableStateOf("") }
@@ -66,24 +61,14 @@ fun AppDrawer(
     Column(
         Modifier
             .fillMaxSize()
-            .background(Hub.Night.copy(alpha = 0.96f))
+            .background(Color(0xF2101014))
             .systemBarsPadding()
             .padding(start = 20.dp, end = 8.dp, top = 12.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(end = 12.dp, bottom = 8.dp)) {
-            Text(title, color = Hub.Text, fontSize = 26.sp, modifier = Modifier.weight(1f))
-            Text("Close", color = Hub.Primary, fontSize = 16.sp, modifier = Modifier.clickable(onClick = onClose).padding(8.dp))
-        }
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
-            placeholder = { Text("Search ${title.lowercase()}") },
-            shape = RectangleShape,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Hub.Primary,
-                unfocusedBorderColor = Hub.Muted.copy(alpha = 0.4f),
-                cursorColor = Hub.Primary,
-            ),
+            placeholder = { Text("Search apps") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
             keyboardActions = KeyboardActions(onGo = {
@@ -93,10 +78,6 @@ fun AppDrawer(
                 .fillMaxWidth()
                 .padding(end = 12.dp),
         )
-
-        if (apps.isEmpty()) {
-            Text(emptyText, color = Hub.Muted, fontSize = 16.sp, modifier = Modifier.padding(top = 20.dp, end = 12.dp))
-        }
 
         Row(Modifier.fillMaxSize()) {
             LazyColumn(state = listState, modifier = Modifier.weight(1f)) {
@@ -109,7 +90,12 @@ fun AppDrawer(
                         actions = listOf(
                             if (isFav) RowAction("Remove from home") { onFavoritesChange(favorites - app.key) }
                             else RowAction("Add to home") { onFavoritesChange(favorites + app.key) },
-                        ) + moreActions(app) + RowAction("App info") { Apps.openInfo(context, app) },
+                            if (Shortcuts.isShortcut(app)) RowAction("Remove shortcut") {
+                                Shortcuts.remove(context, app)
+                                onFavoritesChange(favorites - app.key)
+                                onAppsChanged()
+                            } else RowAction("App info") { Apps.openInfo(context, app) },
+                        ),
                     )
                 }
             }

@@ -28,6 +28,7 @@ class MainActivity : ComponentActivity() {
                 apps = apps.value,
                 homePresses = homePresses.intValue,
                 resumes = resumes.intValue,
+                onAppsChanged = { apps.value = Apps.load(this) },
             )
         }
     }

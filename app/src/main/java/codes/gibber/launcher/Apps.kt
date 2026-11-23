@@ -47,11 +47,15 @@ object Apps {
                 )
             }
             .distinctBy { it.key }
-            .sortedBy { it.label.lowercase() }
             .toList()
+            .plus(Shortcuts.load(context))
+            .sortedBy { it.label.lowercase() }
     }
 
-    fun loadIcon(context: Context, app: AppEntry, sizePx: Int): Bitmap? = try {
+    fun loadIcon(context: Context, app: AppEntry, sizePx: Int): Bitmap? =
+        if (Shortcuts.isShortcut(app)) Shortcuts.loadIcon(context, app, sizePx) else appIcon(context, app, sizePx)
+
+    private fun appIcon(context: Context, app: AppEntry, sizePx: Int): Bitmap? = try {
         val d = context.packageManager.getActivityIcon(ComponentName(app.packageName, app.activityName))
         d.toBitmap(sizePx)
     } catch (e: Exception) {
@@ -59,6 +63,7 @@ object Apps {
     }
 
     fun launch(context: Context, app: AppEntry) {
+        if (Shortcuts.isShortcut(app)) return Shortcuts.launch(context, app)
         val intent = Intent(Intent.ACTION_MAIN)
             .addCategory(Intent.CATEGORY_LAUNCHER)
             .setComponent(ComponentName(app.packageName, app.activityName))

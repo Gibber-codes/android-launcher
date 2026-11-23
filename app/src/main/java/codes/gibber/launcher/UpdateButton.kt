@@ -2,6 +2,8 @@ package codes.gibber.launcher
 
 import android.widget.Toast
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -11,10 +13,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 
-/** The update pill on the home screen: checks GitHub for a newer build, downloads it and opens the installer. */
+/** "Update" on the home screen: checks GitHub for a newer build, downloads it and opens the installer. */
 @Composable
 fun UpdateButton(resumes: Int, modifier: Modifier = Modifier) {
     val context = LocalContext.current
@@ -34,11 +39,11 @@ fun UpdateButton(resumes: Int, modifier: Modifier = Modifier) {
         }
     }
 
-    // Quiet when there is nothing new (tap it to look now), lit when a build is waiting.
-    val label = busy ?: if (ready) "Update ready" else "v${BuildConfig.VERSION_NAME}"
-    HubPill(
-        text = label,
-        lit = ready || busy != null,
+    val label = busy ?: if (ready) "Update ready" else "Update"
+    Text(
+        label,
+        color = if (ready) Color(0xFF8AB4FF) else Color.White,
+        fontSize = 18.sp,
         modifier = modifier
             .clickable(enabled = busy == null) {
                 scope.launch {
@@ -69,5 +74,6 @@ fun UpdateButton(resumes: Int, modifier: Modifier = Modifier) {
                     else Updater.openInstaller(context, apk)
                 }
             }
+            .padding(vertical = 12.dp),
     )
 }
