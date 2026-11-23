@@ -14,7 +14,6 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,54 +47,25 @@ import androidx.compose.ui.viewinterop.AndroidView
 
 /** Gibber Hub, built into the launcher as its second page. */
 @Composable
-fun HubScreen(prefs: Prefs, isShown: Boolean, onGoHome: () -> Unit) {
-    val context = LocalContext.current
-    var url by remember { mutableStateOf(normalizeHubUrl(prefs.hubUrl)) }
-    var editing by remember { mutableStateOf(url.isBlank()) }
-
+fun HubScreen(hubUrl: String, onSaveUrl: (String) -> Unit, isShown: Boolean, onGoHome: () -> Unit) {
+    // No bar on top: the hub fills the page, and Back steps back inside it, then goes home.
+    // The address lives in Gibber Settings; this form only shows before one is set.
     Column(
         Modifier
             .fillMaxSize()
             .systemBarsPadding()
     ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .background(Color(0xCC101014))
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text("‹  Home", color = Color.White, fontSize = 16.sp, modifier = Modifier.clickable(onClick = onGoHome))
-            Text("Open in Chrome", color = Color.White, fontSize = 16.sp, modifier = Modifier.clickable {
-                if (url.isNotBlank()) {
-                    try {
-                        context.startActivity(
-                            Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        )
-                    } catch (e: Exception) {
-                    }
-                }
-            })
-            Text("Address", color = Color.White, fontSize = 16.sp, modifier = Modifier.clickable { editing = true })
-        }
-
-        if (editing || url.isBlank()) {
-            AddressForm(
-                current = url,
-                onSave = {
-                    prefs.hubUrl = normalizeHubUrl(it)
-                    url = prefs.hubUrl
-                    editing = false
-                },
-            )
+        if (hubUrl.isBlank()) {
+            BackHandler(enabled = isShown) { onGoHome() }
+            AddressForm(current = hubUrl, onSave = onSaveUrl)
         } else {
-            key(url) { HubWebView(url = url, isShown = isShown, onGoHome = onGoHome) }
+            key(hubUrl) { HubWebView(url = hubUrl, isShown = isShown, onGoHome = onGoHome) }
         }
     }
 }
 
 @Composable
-private fun AddressForm(current: String, onSave: (String) -> Unit) {
+fun AddressForm(current: String, onSave: (String) -> Unit) {
     var text by remember { mutableStateOf(current.ifBlank { "http://" }) }
     Column(Modifier.padding(24.dp)) {
         Text("Where does your hub run?", color = Color.White, fontSize = 20.sp)

@@ -45,7 +45,18 @@ fun LauncherApp(
 
         // Gibber Hub is an app in the list; opening it slides over to the hub page.
         val context = androidx.compose.ui.platform.LocalContext.current
+        var hubUrl by remember { mutableStateOf(normalizeHubUrl(prefs.hubUrl)) }
+        var settingsOpen by remember { mutableStateOf(false) }
+        fun saveHubUrl(raw: String) {
+            prefs.hubUrl = normalizeHubUrl(raw)
+            hubUrl = prefs.hubUrl
+        }
+
         androidx.compose.runtime.SideEffect {
+            HubLink.openSettings = {
+                drawerOpen = false
+                settingsOpen = true
+            }
             HubLink.open = {
                 drawerOpen = false
                 scope.launch { pager.animateScrollToPage(PAGE_HUB) }
@@ -93,7 +104,8 @@ fun LauncherApp(
                         onOpenDrawer = { drawerOpen = true },
                     )
                     PAGE_HUB -> HubScreen(
-                        prefs = prefs,
+                        hubUrl = hubUrl,
+                        onSaveUrl = ::saveHubUrl,
                         isShown = pager.currentPage == PAGE_HUB,
                         onGoHome = { scope.launch { pager.animateScrollToPage(PAGE_HOME) } },
                     )
@@ -108,6 +120,14 @@ fun LauncherApp(
                     onClose = { drawerOpen = false },
                     onAppsChanged = onAppsChanged,
                     resumes = resumes,
+                )
+            }
+            if (settingsOpen) {
+                SettingsScreen(
+                    hubUrl = hubUrl,
+                    onSaveUrl = ::saveHubUrl,
+                    resumes = resumes,
+                    onClose = { settingsOpen = false },
                 )
             }
         }

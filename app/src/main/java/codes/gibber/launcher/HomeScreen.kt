@@ -97,7 +97,7 @@ fun HomeScreen(
                         if (i > 0) add(RowAction("Move up") { onFavoritesChange(favorites.swap(i, i - 1)) })
                         if (i < favorites.lastIndex) add(RowAction("Move down") { onFavoritesChange(favorites.swap(i, i + 1)) })
                         add(RowAction("Remove from home") { onFavoritesChange(favorites - app.key) })
-                        if (!Shortcuts.isShortcut(app) && !HubLink.isHub(app)) add(RowAction("App info") { Apps.openInfo(context, app) })
+                        if (!Shortcuts.isShortcut(app) && !HubLink.isOwn(app)) add(RowAction("App info") { Apps.openInfo(context, app) })
                     },
                 )
             }

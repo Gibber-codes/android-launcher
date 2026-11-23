@@ -135,7 +135,7 @@ fun AppDrawer(
                                 else RowAction("Add to home") { onFavoritesChange(favorites + app.key) }
                             )
                             when {
-                                HubLink.isHub(app) -> {}
+                                HubLink.isOwn(app) -> {}
                                 Shortcuts.isShortcut(app) -> add(RowAction("Remove shortcut") {
                                     Shortcuts.remove(context, app)
                                     onFavoritesChange(favorites - app.key)

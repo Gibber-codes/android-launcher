@@ -50,12 +50,13 @@ object Apps {
             .toList()
             .plus(Shortcuts.load(context))
             .plus(HubLink.entry(context))
+            .plus(HubLink.settingsEntry(context))
             .sortedBy { it.label.lowercase() }
     }
 
     fun loadIcon(context: Context, app: AppEntry, sizePx: Int): Bitmap? =
         when {
-            HubLink.isHub(app) -> try {
+            HubLink.isOwn(app) -> try {
                 context.packageManager.getApplicationIcon(context.packageName).toBitmap(sizePx)
             } catch (e: Exception) {
                 null
@@ -73,6 +74,7 @@ object Apps {
 
     fun launch(context: Context, app: AppEntry) {
         if (HubLink.isHub(app)) return HubLink.open()
+        if (HubLink.isSettings(app)) return HubLink.openSettings()
         if (Shortcuts.isShortcut(app)) return Shortcuts.launch(context, app)
         val intent = Intent(Intent.ACTION_MAIN)
             .addCategory(Intent.CATEGORY_LAUNCHER)
