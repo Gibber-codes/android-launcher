@@ -3,6 +3,7 @@ package codes.gibber.launcher
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
@@ -15,6 +16,8 @@ data class AppEntry(
     val label: String,
     val packageName: String,
     val activityName: String,
+    /** The app calls itself a game (Android's game category). */
+    val isGame: Boolean = false,
 ) {
     /** Stable id used to save favorites. */
     val key: String get() = "$packageName/$activityName"
@@ -40,6 +43,7 @@ object Apps {
                     label = it.loadLabel(pm).toString(),
                     packageName = it.activityInfo.packageName,
                     activityName = it.activityInfo.name,
+                    isGame = isGame(it.activityInfo.applicationInfo),
                 )
             }
             .distinctBy { it.key }
@@ -65,6 +69,15 @@ object Apps {
             // The app was removed or can't start; the list refreshes on the next resume.
         }
     }
+
+    // Older games mark themselves with a flag instead of the category.
+    @Suppress("DEPRECATION")
+    private fun isGame(info: ApplicationInfo): Boolean =
+        info.category == ApplicationInfo.CATEGORY_GAME || (info.flags and ApplicationInfo.FLAG_IS_GAME) != 0
+
+    /** The Games list: apps that call themselves games, plus any you added, minus any you took off. */
+    fun games(apps: List<AppEntry>, added: Set<String>, removed: Set<String>): List<AppEntry> =
+        apps.filter { (it.isGame || it.key in added) && it.key !in removed }
 
     fun openInfo(context: Context, app: AppEntry) {
         val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${app.packageName}"))
