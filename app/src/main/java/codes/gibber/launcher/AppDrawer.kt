@@ -27,6 +27,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -58,9 +63,46 @@ fun AppDrawer(
         if (index >= 0) scope.launch { listState.scrollToItem(index) }
     }
 
+    // Swiping down closes the list: on the search bar, or past the top of the list.
+    val swipeDownPx = with(androidx.compose.ui.platform.LocalDensity.current) { 100.dp.toPx() }
+    val closeOnSwipeDown = remember(onClose) {
+        object : NestedScrollConnection {
+            var pulled = 0f
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (source != NestedScrollSource.UserInput) return Offset.Zero
+                if (available.y > 0) pulled += available.y else if (consumed.y != 0f) pulled = 0f
+                if (pulled > swipeDownPx) {
+                    pulled = 0f
+                    onClose()
+                }
+                return Offset.Zero
+            }
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                // A quick flick down from the top closes it too, but not a fling that only ran into the top.
+                if (pulled > swipeDownPx / 4 && available.y > 1500f) onClose()
+                pulled = 0f
+                return Velocity.Zero
+            }
+        }
+    }
+
     Column(
         Modifier
             .fillMaxSize()
+            .nestedScroll(closeOnSwipeDown)
+            .pointerInput(onClose) {
+                var pulled = 0f
+                detectVerticalDragGestures(
+                    onDragStart = { pulled = 0f },
+                    onVerticalDrag = { _, dy ->
+                        pulled += dy
+                        if (pulled > swipeDownPx) {
+                            pulled = Float.NEGATIVE_INFINITY
+                            onClose()
+                        }
+                    },
+                )
+            }
             .background(Color(0xF2101014))
             .systemBarsPadding()
             .padding(start = 20.dp, end = 8.dp, top = 12.dp)
