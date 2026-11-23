@@ -45,7 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 
-/** Gibber Hub, built into the launcher as its second page. */
+/** Gibber Hub, built into the launcher as its second page, drawn natively from the hub's own answers. */
 @Composable
 fun HubScreen(hubUrl: String, onSaveUrl: (String) -> Unit, isShown: Boolean, onGoHome: () -> Unit) {
     // No bar on top: the hub fills the page, and Back steps back inside it, then goes home.
@@ -59,7 +59,7 @@ fun HubScreen(hubUrl: String, onSaveUrl: (String) -> Unit, isShown: Boolean, onG
             BackHandler(enabled = isShown) { onGoHome() }
             AddressForm(current = hubUrl, onSave = onSaveUrl)
         } else {
-            key(hubUrl) { HubWebView(url = hubUrl, isShown = isShown, onGoHome = onGoHome) }
+            key(hubUrl) { NativeHub(hubUrl = hubUrl, isShown = isShown, onGoHome = onGoHome) }
         }
     }
 }
@@ -97,7 +97,7 @@ fun normalizeHubUrl(raw: String): String {
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-private fun HubWebView(url: String, isShown: Boolean, onGoHome: () -> Unit) {
+fun HubWebView(url: String, proxyBase: String, isShown: Boolean, onGoHome: () -> Unit) {
     val context = LocalContext.current
     var webView by remember { mutableStateOf<WebView?>(null) }
     var progress by remember(url) { mutableIntStateOf(0) }
@@ -137,7 +137,7 @@ private fun HubWebView(url: String, isShown: Boolean, onGoHome: () -> Unit) {
                         override fun shouldInterceptRequest(
                             view: WebView,
                             request: WebResourceRequest,
-                        ): WebResourceResponse? = LocalhostProxy.intercept(request, url)
+                        ): WebResourceResponse? = LocalhostProxy.intercept(request, proxyBase)
 
                         override fun onPageStarted(view: WebView, pageUrl: String?, favicon: Bitmap?) {
                             error = null
@@ -149,7 +149,7 @@ private fun HubWebView(url: String, isShown: Boolean, onGoHome: () -> Unit) {
                             err: WebResourceError,
                         ) {
                             if (request.isForMainFrame) {
-                                error = "Couldn't reach the hub: ${err.description}"
+                                error = "Couldn't reach it: ${err.description}"
                             }
                         }
 
@@ -160,7 +160,7 @@ private fun HubWebView(url: String, isShown: Boolean, onGoHome: () -> Unit) {
                         ) {
                             // Only the hub page itself failing is worth a banner; a game's own messages are its business.
                             if (request.isForMainFrame) {
-                                error = "The hub answered with error ${response.statusCode}"
+                                error = "It answered with error ${response.statusCode}"
                             }
                         }
                     }
@@ -197,7 +197,7 @@ private fun HubWebView(url: String, isShown: Boolean, onGoHome: () -> Unit) {
                 Spacer(Modifier.height(4.dp))
                 Text(url, color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
                 Text(
-                    "Check the hub is running on your PC and your phone is on the same Wi-Fi.",
+                    "Check it's running on your PC and your phone is on the same Wi-Fi.",
                     color = Color.White.copy(alpha = 0.7f),
                     fontSize = 12.sp,
                 )
