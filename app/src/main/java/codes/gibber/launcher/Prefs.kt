@@ -28,7 +28,13 @@ class Prefs(context: Context) {
         get() = sp.getString(KEY_DEV_URL, "")!!
         set(value) = sp.edit().putString(KEY_DEV_URL, value.trim()).apply()
 
+    /** Gibber Hub has been put on the home screen once, so taking it off sticks. */
+    var hubPlaced: Boolean
+        get() = sp.getBoolean(KEY_HUB_PLACED, false)
+        set(value) = sp.edit().putBoolean(KEY_HUB_PLACED, value).apply()
+
     private companion object {
+        const val KEY_HUB_PLACED = "hub_placed"
         const val KEY_FAVORITES = "favorites"
         const val KEY_HUB_URL = "hub_url"
         const val KEY_GAMES_ADDED = "games_added"

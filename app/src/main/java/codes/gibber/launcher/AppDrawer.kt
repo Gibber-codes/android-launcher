@@ -27,11 +27,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.unit.Velocity
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalDensity
+import kotlin.math.abs
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -48,6 +51,7 @@ fun AppDrawer(
     onFavoritesChange: (List<String>) -> Unit,
     onClose: () -> Unit,
     onAppsChanged: () -> Unit = {},
+    resumes: Int = 0,
 ) {
     val context = LocalContext.current
     var query by remember { mutableStateOf("") }
@@ -63,50 +67,42 @@ fun AppDrawer(
         if (index >= 0) scope.launch { listState.scrollToItem(index) }
     }
 
-    // Swiping down closes the list: on the search bar, or past the top of the list.
-    val swipeDownPx = with(androidx.compose.ui.platform.LocalDensity.current) { 100.dp.toPx() }
-    val closeOnSwipeDown = remember(onClose) {
-        object : NestedScrollConnection {
-            var pulled = 0f
-            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                if (source != NestedScrollSource.UserInput) return Offset.Zero
-                if (available.y > 0) pulled += available.y else if (consumed.y != 0f) pulled = 0f
-                if (pulled > swipeDownPx) {
-                    pulled = 0f
-                    onClose()
-                }
-                return Offset.Zero
-            }
-            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
-                // A quick flick down from the top closes it too, but not a fling that only ran into the top.
-                if (pulled > swipeDownPx / 4 && available.y > 1500f) onClose()
-                pulled = 0f
-                return Velocity.Zero
-            }
-        }
-    }
+    // Swiping down closes the list, when it's at the top or the swipe starts on the search bar.
+    // It watches the touch without taking it, so scrolling the list works as before.
+    val density = LocalDensity.current
+    val swipeDownPx = with(density) { 90.dp.toPx() }
+    val stripPx = with(density) { 44.dp.toPx() }
+    var listTop by remember { mutableFloatStateOf(0f) }
 
     Column(
         Modifier
             .fillMaxSize()
-            .nestedScroll(closeOnSwipeDown)
             .pointerInput(onClose) {
-                var pulled = 0f
-                detectVerticalDragGestures(
-                    onDragStart = { pulled = 0f },
-                    onVerticalDrag = { _, dy ->
-                        pulled += dy
-                        if (pulled > swipeDownPx) {
-                            pulled = Float.NEGATIVE_INFINITY
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    val onStrip = down.position.x > size.width - stripPx
+                    val atTop = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
+                    val onSearch = down.position.y < listTop
+                    if (onStrip || !(atTop || onSearch)) return@awaitEachGesture
+                    while (true) {
+                        val change = awaitPointerEvent(PointerEventPass.Initial)
+                            .changes.firstOrNull { it.id == down.id } ?: break
+                        if (!change.pressed) break
+                        val dy = change.position.y - down.position.y
+                        val dx = change.position.x - down.position.x
+                        if (dy < -viewConfiguration.touchSlop) break
+                        if (dy > swipeDownPx && dy > 2 * abs(dx)) {
                             onClose()
+                            break
                         }
-                    },
-                )
+                    }
+                }
             }
             .background(Color(0xF2101014))
             .systemBarsPadding()
             .padding(start = 20.dp, end = 8.dp, top = 12.dp)
     ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 12.dp)) {
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
@@ -116,12 +112,16 @@ fun AppDrawer(
             keyboardActions = KeyboardActions(onGo = {
                 shown.firstOrNull()?.let { Apps.launch(context, it) }
             }),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(end = 12.dp),
+            modifier = Modifier.weight(1f),
         )
+        UpdateButton(resumes = resumes, modifier = Modifier.padding(start = 14.dp))
+        }
 
-        Row(Modifier.fillMaxSize()) {
+        Row(
+            Modifier
+                .fillMaxSize()
+                .onGloballyPositioned { listTop = it.positionInRoot().y }
+        ) {
             LazyColumn(state = listState, modifier = Modifier.weight(1f)) {
                 items(shown, key = { it.key }) { app ->
                     val isFav = app.key in favorites
@@ -129,15 +129,21 @@ fun AppDrawer(
                         app = app,
                         textSize = 18.sp,
                         iconSize = 36.dp,
-                        actions = listOf(
-                            if (isFav) RowAction("Remove from home") { onFavoritesChange(favorites - app.key) }
-                            else RowAction("Add to home") { onFavoritesChange(favorites + app.key) },
-                            if (Shortcuts.isShortcut(app)) RowAction("Remove shortcut") {
-                                Shortcuts.remove(context, app)
-                                onFavoritesChange(favorites - app.key)
-                                onAppsChanged()
-                            } else RowAction("App info") { Apps.openInfo(context, app) },
-                        ),
+                        actions = buildList {
+                            add(
+                                if (isFav) RowAction("Remove from home") { onFavoritesChange(favorites - app.key) }
+                                else RowAction("Add to home") { onFavoritesChange(favorites + app.key) }
+                            )
+                            when {
+                                HubLink.isHub(app) -> {}
+                                Shortcuts.isShortcut(app) -> add(RowAction("Remove shortcut") {
+                                    Shortcuts.remove(context, app)
+                                    onFavoritesChange(favorites - app.key)
+                                    onAppsChanged()
+                                })
+                                else -> add(RowAction("App info") { Apps.openInfo(context, app) })
+                            }
+                        },
                     )
                 }
             }

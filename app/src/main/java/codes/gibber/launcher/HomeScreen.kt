@@ -1,13 +1,9 @@
 package codes.gibber.launcher
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -34,8 +30,6 @@ fun HomeScreen(
     favorites: List<String>,
     onFavoritesChange: (List<String>) -> Unit,
     onOpenDrawer: () -> Unit,
-    onOpenHub: () -> Unit,
-    resumes: Int,
 ) {
     val context = LocalContext.current
     val byKey = remember(apps) { apps.associateBy { it.key } }
@@ -103,34 +97,12 @@ fun HomeScreen(
                         if (i > 0) add(RowAction("Move up") { onFavoritesChange(favorites.swap(i, i - 1)) })
                         if (i < favorites.lastIndex) add(RowAction("Move down") { onFavoritesChange(favorites.swap(i, i + 1)) })
                         add(RowAction("Remove from home") { onFavoritesChange(favorites - app.key) })
-                        if (!Shortcuts.isShortcut(app)) add(RowAction("App info") { Apps.openInfo(context, app) })
+                        if (!Shortcuts.isShortcut(app) && !HubLink.isHub(app)) add(RowAction("App info") { Apps.openInfo(context, app) })
                     },
                 )
             }
         }
 
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                "All apps",
-                color = Color.White,
-                fontSize = 18.sp,
-                modifier = Modifier
-                    .clickable(onClick = onOpenDrawer)
-                    .padding(vertical = 12.dp),
-            )
-            UpdateButton(resumes = resumes)
-            Text(
-                "Gibber Hub  ›",
-                color = Color.White,
-                fontSize = 18.sp,
-                modifier = Modifier
-                    .clickable(onClick = onOpenHub)
-                    .padding(vertical = 12.dp),
-            )
-        }
     }
 }
 

@@ -43,6 +43,23 @@ fun LauncherApp(
             prefs.favorites = list
         }
 
+        // Gibber Hub is an app in the list; opening it slides over to the hub page.
+        val context = androidx.compose.ui.platform.LocalContext.current
+        androidx.compose.runtime.SideEffect {
+            HubLink.open = {
+                drawerOpen = false
+                scope.launch { pager.animateScrollToPage(PAGE_HUB) }
+            }
+        }
+        // The first time, put Gibber Hub on the home screen, since the bottom bar's link is gone.
+        LaunchedEffect(Unit) {
+            if (!prefs.hubPlaced) {
+                val key = HubLink.key(context)
+                if (key !in favorites) saveFavorites(favorites + key)
+                prefs.hubPlaced = true
+            }
+        }
+
         // Pressing Home always brings you back to the favorites.
         LaunchedEffect(homePresses) {
             if (homePresses > 0) {
@@ -74,8 +91,6 @@ fun LauncherApp(
                         favorites = favorites,
                         onFavoritesChange = ::saveFavorites,
                         onOpenDrawer = { drawerOpen = true },
-                        onOpenHub = { scope.launch { pager.animateScrollToPage(PAGE_HUB) } },
-                        resumes = resumes,
                     )
                     PAGE_HUB -> HubScreen(
                         prefs = prefs,
@@ -92,6 +107,7 @@ fun LauncherApp(
                     onFavoritesChange = ::saveFavorites,
                     onClose = { drawerOpen = false },
                     onAppsChanged = onAppsChanged,
+                    resumes = resumes,
                 )
             }
         }
