@@ -1,8 +1,6 @@
 package codes.gibber.launcher
 
-import android.content.Intent
 import android.content.pm.ActivityInfo
-import android.net.Uri
 import android.widget.Toast
 import androidx.compose.runtime.DisposableEffect
 import androidx.activity.compose.BackHandler
@@ -57,9 +55,6 @@ private val Dim = Color.White.copy(alpha = 0.6f)
 private val Green = Color(0xFF5FD38A)
 private val Amber = Color(0xFFE8B04B)
 private val Red = Color(0xFFE06C6C)
-
-/** Your GitHub, where the launcher and hub-kit live. */
-private const val GITHUB = "https://github.com/Gibber-codes"
 
 /** Games that are played on their side: the phone turns to landscape when one opens. */
 private val SIDEWAYS = setOf("dead-tide")
@@ -219,33 +214,6 @@ fun NativeHub(hubUrl: String, isShown: Boolean, onGoHome: () -> Unit) {
 
         item {
             Spacer(Modifier.height(4.dp))
-            // Your GitHub opens in the GitHub app when it's installed, otherwise in Chrome,
-            // where you're already signed in.
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(GITHUB))
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        try {
-                            context.startActivity(intent)
-                        } catch (e: Exception) {
-                            Toast.makeText(context, "Couldn't open GitHub.", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                    .padding(vertical = 14.dp, horizontal = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("GitHub", color = Color.White, fontSize = 15.sp)
-                    Text("Gibber-codes", color = Dim, fontSize = 12.sp)
-                }
-                Text("›", color = Dim, fontSize = 20.sp)
-            }
-        }
-
-        item {
             Row(
                 Modifier
                     .fillMaxWidth()
