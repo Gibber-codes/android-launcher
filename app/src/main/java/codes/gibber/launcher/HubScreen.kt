@@ -23,7 +23,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
@@ -50,10 +50,12 @@ import androidx.compose.ui.viewinterop.AndroidView
 fun HubScreen(hubUrl: String, onSaveUrl: (String) -> Unit, isShown: Boolean, onGoHome: () -> Unit) {
     // No bar on top: the hub fills the page, and Back steps back inside it, then goes home.
     // The address lives in Gibber Settings; this form only shows before one is set.
+    if (isShown) HideSystemBars()
     Column(
         Modifier
             .fillMaxSize()
-            .systemBarsPadding()
+            .background(Color(0xFF101014))
+            .safeDrawingPadding()
     ) {
         if (hubUrl.isBlank()) {
             BackHandler(enabled = isShown) { onGoHome() }

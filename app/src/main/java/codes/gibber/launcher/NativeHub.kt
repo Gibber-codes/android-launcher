@@ -1,14 +1,8 @@
 package codes.gibber.launcher
 
-import android.app.Activity
-import android.content.Context
-import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
 import android.widget.Toast
 import androidx.compose.runtime.DisposableEffect
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -66,31 +60,14 @@ private val SIDEWAYS = setOf("dead-tide")
 /** What sits on top of the native hub: a game's page (with its workspace), or the full web hub. */
 private data class OpenPage(val url: String, val game: String?)
 
-private fun Context.activity(): Activity? = when (this) {
-    is Activity -> this
-    is ContextWrapper -> baseContext.activity()
-    else -> null
-}
-
-/**
- * While a game is on screen: the status bar and the navigation buttons hide (a swipe from the
- * edge shows them for a moment), and a sideways game turns the phone to landscape. Leaving the
- * game puts both back.
- */
+/** A sideways game turns the phone to landscape while it's on screen, and back when it leaves. */
 @Composable
 private fun GameWindow(sideways: Boolean) {
     val activity = LocalContext.current.activity() ?: return
     DisposableEffect(activity, sideways) {
-        val window = activity.window
-        val bars = WindowCompat.getInsetsController(window, window.decorView)
-        bars.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        bars.hide(WindowInsetsCompat.Type.systemBars())
         val before = activity.requestedOrientation
         if (sideways) activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-        onDispose {
-            bars.show(WindowInsetsCompat.Type.systemBars())
-            if (sideways) activity.requestedOrientation = before
-        }
+        onDispose { if (sideways) activity.requestedOrientation = before }
     }
 }
 
