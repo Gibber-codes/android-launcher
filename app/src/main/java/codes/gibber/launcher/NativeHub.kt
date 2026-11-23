@@ -1,6 +1,14 @@
 package codes.gibber.launcher
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.pm.ActivityInfo
 import android.widget.Toast
+import androidx.compose.runtime.DisposableEffect
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -52,6 +60,40 @@ private val Green = Color(0xFF5FD38A)
 private val Amber = Color(0xFFE8B04B)
 private val Red = Color(0xFFE06C6C)
 
+/** Games that are played on their side: the phone turns to landscape when one opens. */
+private val SIDEWAYS = setOf("dead-tide")
+
+/** What sits on top of the native hub: a game's page (with its workspace), or the full web hub. */
+private data class OpenPage(val url: String, val game: String?)
+
+private fun Context.activity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.activity()
+    else -> null
+}
+
+/**
+ * While a game is on screen: the status bar and the navigation buttons hide (a swipe from the
+ * edge shows them for a moment), and a sideways game turns the phone to landscape. Leaving the
+ * game puts both back.
+ */
+@Composable
+private fun GameWindow(sideways: Boolean) {
+    val activity = LocalContext.current.activity() ?: return
+    DisposableEffect(activity, sideways) {
+        val window = activity.window
+        val bars = WindowCompat.getInsetsController(window, window.decorView)
+        bars.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        bars.hide(WindowInsetsCompat.Type.systemBars())
+        val before = activity.requestedOrientation
+        if (sideways) activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        onDispose {
+            bars.show(WindowInsetsCompat.Type.systemBars())
+            if (sideways) activity.requestedOrientation = before
+        }
+    }
+}
+
 /**
  * The hub's home drawn as launcher screens. It asks the hub on the PC for the same things its
  * web page shows, so starting a game here starts it there. A game, and the full web hub, still
@@ -63,7 +105,7 @@ fun NativeHub(hubUrl: String, isShown: Boolean, onGoHome: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var page by remember { mutableStateOf<String?>(null) }
+    var page by remember { mutableStateOf<OpenPage?>(null) }
     var reached by remember { mutableStateOf<Boolean?>(null) }
     var name by remember { mutableStateOf<String?>(null) }
     var workspaces by remember { mutableStateOf<List<HubWorkspace>>(emptyList()) }
@@ -106,7 +148,8 @@ fun NativeHub(hubUrl: String, isShown: Boolean, onGoHome: () -> Unit) {
 
     val open = page
     if (open != null) {
-        HubWebView(url = open, proxyBase = hubUrl, isShown = isShown, onGoHome = { page = null })
+        if (open.game != null && isShown) GameWindow(sideways = open.game in SIDEWAYS)
+        HubWebView(url = open.url, proxyBase = hubUrl, isShown = isShown, onGoHome = { page = null })
         return
     }
 
@@ -161,7 +204,7 @@ fun NativeHub(hubUrl: String, isShown: Boolean, onGoHome: () -> Unit) {
                     busy = w.id in busy,
                     onStart = { press("start", w) },
                     onStop = { press("stop", w) },
-                    onOpen = { path -> page = api.pageOf(w, path) },
+                    onOpen = { path -> page = OpenPage(api.pageOf(w, path), w.id) },
                 )
             }
         }
@@ -190,7 +233,7 @@ fun NativeHub(hubUrl: String, isShown: Boolean, onGoHome: () -> Unit) {
                 Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
-                    .clickable { page = hubUrl }
+                    .clickable { page = OpenPage(hubUrl, null) }
                     .padding(vertical = 14.dp, horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
