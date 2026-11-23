@@ -5,7 +5,6 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.view.ViewGroup
-import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -133,8 +132,6 @@ private fun HubWebView(url: String, isShown: Boolean, onGoHome: () -> Unit) {
     var webView by remember { mutableStateOf<WebView?>(null) }
     var progress by remember(url) { mutableIntStateOf(0) }
     var error by remember(url) { mutableStateOf<String?>(null) }
-    var pageError by remember(url) { mutableStateOf<String?>(null) }
-    var missing by remember(url) { mutableStateOf<List<String>>(emptyList()) }
 
     // Back steps back inside the hub first, then returns home.
     BackHandler(enabled = isShown) {
@@ -165,13 +162,6 @@ private fun HubWebView(url: String, isShown: Boolean, onGoHome: () -> Unit) {
                         override fun onProgressChanged(view: WebView, newProgress: Int) {
                             progress = newProgress
                         }
-
-                        override fun onConsoleMessage(message: ConsoleMessage): Boolean {
-                            if (message.messageLevel() == ConsoleMessage.MessageLevel.ERROR) {
-                                pageError = "${message.message()} (line ${message.lineNumber()})"
-                            }
-                            return super.onConsoleMessage(message)
-                        }
                     }
                     webViewClient = object : WebViewClient() {
                         override fun shouldInterceptRequest(
@@ -181,7 +171,6 @@ private fun HubWebView(url: String, isShown: Boolean, onGoHome: () -> Unit) {
 
                         override fun onPageStarted(view: WebView, pageUrl: String?, favicon: Bitmap?) {
                             error = null
-                            missing = emptyList()
                         }
 
                         override fun onReceivedError(
@@ -199,11 +188,9 @@ private fun HubWebView(url: String, isShown: Boolean, onGoHome: () -> Unit) {
                             request: WebResourceRequest,
                             response: WebResourceResponse,
                         ) {
+                            // Only the hub page itself failing is worth a banner; a game's own messages are its business.
                             if (request.isForMainFrame) {
                                 error = "The hub answered with error ${response.statusCode}"
-                            } else {
-                                val path = request.url.path ?: request.url.toString()
-                                if (!path.endsWith("favicon.ico")) missing = missing + "$path (${response.statusCode})"
                             }
                         }
                     }
@@ -227,9 +214,7 @@ private fun HubWebView(url: String, isShown: Boolean, onGoHome: () -> Unit) {
             )
         }
 
-        val missingNote = if (missing.isEmpty()) null
-        else "${missing.size} of the hub's files didn't load, like ${missing.first()}"
-        val message = error ?: if (progress == 100) (missingNote ?: pageError) else null
+        val message = error
         if (message != null) {
             Column(
                 Modifier
@@ -250,7 +235,6 @@ private fun HubWebView(url: String, isShown: Boolean, onGoHome: () -> Unit) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Button(onClick = {
                         error = null
-                        pageError = null
                         webView?.reload()
                     }) { Text("Retry") }
                     Button(onClick = {
