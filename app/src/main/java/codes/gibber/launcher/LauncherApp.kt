@@ -137,8 +137,6 @@ fun LauncherApp(
                                 hasWidgets = widgetIds.isNotEmpty(),
                                 onAddWidget = { pickingWidget = true },
                                 onRemoveWidget = { removingWidget = true },
-                                devMode = devMode,
-                                onDevMode = { devMode = it; prefs.devMode = it },
                             )
                         }
                     },
@@ -209,6 +207,8 @@ fun LauncherApp(
                     onSaveUrl = ::saveHubUrl,
                     resumes = resumes,
                     onClose = { settingsOpen = false },
+                    devMode = devMode,
+                    onDevMode = { devMode = it; prefs.devMode = it },
                 )
             }
             val app = moving
@@ -228,14 +228,12 @@ fun LauncherApp(
     }
 }
 
-/** The thin row at the top of Home: add or remove a widget, and the dev mode switch. */
+/** The thin row at the top of Home: add or remove a widget. */
 @Composable
 private fun HomeTopBar(
     hasWidgets: Boolean,
     onAddWidget: () -> Unit,
     onRemoveWidget: () -> Unit,
-    devMode: Boolean,
-    onDevMode: (Boolean) -> Unit,
 ) {
     val dim = Color.White.copy(alpha = 0.75f)
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
@@ -243,9 +241,5 @@ private fun HomeTopBar(
         if (hasWidgets) {
             Text("Remove widget", color = dim, fontSize = 13.sp, modifier = Modifier.clickable(onClick = onRemoveWidget).padding(8.dp))
         }
-        Spacer(Modifier.weight(1f))
-        Text("Dev mode", color = Color.White.copy(alpha = if (devMode) 1f else 0.6f), fontSize = 13.sp)
-        Spacer(Modifier.width(8.dp))
-        Switch(checked = devMode, onCheckedChange = onDevMode, modifier = Modifier.scale(0.8f))
     }
 }
