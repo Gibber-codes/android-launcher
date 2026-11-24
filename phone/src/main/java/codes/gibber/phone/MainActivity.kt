@@ -26,6 +26,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import codes.gibber.phone.data.Numbers
+import codes.gibber.phone.data.Sorting
 import codes.gibber.phone.sms.recipientsOf
 import codes.gibber.phone.ui.ContactEditScreen
 import codes.gibber.phone.ui.FullScreen
@@ -150,6 +151,16 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         resumes.intValue++
         checkForUpdate()
+        refreshSorting()
+    }
+
+    /** Picks up Claude's newest sorting from Gibber Hub now and then, and redraws when it changed. */
+    private fun refreshSorting() {
+        scope.launch {
+            val before = Sorting.fetchedAt(this@MainActivity)
+            Sorting.refreshIfDue(this@MainActivity)
+            if (Sorting.fetchedAt(this@MainActivity) != before) resumes.intValue++
+        }
     }
 
     /** A quiet look on GitHub; a new build posts the "Update ready" notification once. */

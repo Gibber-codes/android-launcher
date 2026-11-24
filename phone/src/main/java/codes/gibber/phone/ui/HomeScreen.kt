@@ -4,6 +4,8 @@ import android.text.format.DateUtils
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -67,6 +69,7 @@ import codes.gibber.phone.data.Contacts
 import codes.gibber.phone.data.Numbers
 import codes.gibber.phone.data.Person
 import codes.gibber.phone.data.RecentItem
+import codes.gibber.phone.data.Sorting
 import codes.gibber.phone.data.Recent
 import codes.gibber.phone.sms.Pending
 import kotlinx.coroutines.Dispatchers
@@ -227,8 +230,25 @@ private fun RecentList(main: MainActivity, list: List<RecentItem>?) {
         Empty("No calls or texts yet.")
         return
     }
+    // What Claude marked spam on your PC waits at the bottom, folded, instead of mixing in.
+    val (spam, kept) = list.partition { Sorting.spamWhy(main, it.addresses, it.contactId) != null }
+    var showSpam by rememberSaveable { mutableStateOf(false) }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = listPadding) {
-        items(list, key = { it.key }) { item -> RecentRow(main, item) }
+        items(kept, key = { it.key }) { item -> RecentRow(main, item) }
+        if (spam.isNotEmpty()) {
+            item(key = "spam") {
+                Row(
+                    Modifier.fillMaxWidth().clickable { showSpam = !showSpam }.padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        if (showSpam) "Hide spam" else "Spam: ${spam.size} hidden by Claude",
+                        color = Ink.Muted, fontSize = 15.sp, modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+            if (showSpam) items(spam, key = { "s${it.key}" }) { item -> RecentRow(main, item) }
+        }
     }
 }
 
@@ -283,8 +303,24 @@ private fun RecentRow(main: MainActivity, item: RecentItem) {
 @Composable
 private fun EveryoneList(main: MainActivity, people: List<Person>?) {
     if (people == null) return
-    val favorites = people.filter { it.starred }
+    // Claude's groups from your PC, as chips; picking one shows only its people.
+    val groups = Sorting.sorted(main).groups.map { it.name }
+    var picked by rememberSaveable { mutableStateOf<String?>(null) }
+    val group = picked?.takeIf { it in groups }
+    val shown = if (group == null) people else people.filter { group in Sorting.groupsOf(main, it) }
+    val favorites = if (group == null) people.filter { it.starred } else emptyList()
     LazyColumn(Modifier.fillMaxSize(), contentPadding = listPadding) {
+        if (groups.isNotEmpty()) {
+            item(key = "groups") {
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Pill("All", if (group == null) Ink.Blue else Ink.Raised) { picked = null }
+                    for (g in groups) Pill(g, if (group == g) Ink.Blue else Ink.Raised) { picked = g }
+                }
+            }
+        }
         item {
             Row(
                 Modifier.fillMaxWidth().clickable { main.go(Screen.EditContact()) }.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -302,8 +338,8 @@ private fun EveryoneList(main: MainActivity, people: List<Person>?) {
             items(favorites, key = { "f${it.contactId}" }) { PersonRow(main, it) }
             item { Label("Everyone") }
         }
-        if (people.isEmpty()) item { Empty("No contacts yet.") }
-        items(people, key = { "p${it.contactId}" }) { PersonRow(main, it) }
+        if (shown.isEmpty()) item { Empty(if (group == null) "No contacts yet." else "No one in $group.") }
+        items(shown, key = { "p${it.contactId}" }) { PersonRow(main, it) }
     }
 }
 

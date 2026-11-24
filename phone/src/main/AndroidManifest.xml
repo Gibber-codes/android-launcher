@@ -44,7 +44,8 @@
         android:label="People"
         android:icon="@mipmap/ic_launcher"
         android:theme="@style/Theme.GibberPhone"
-        android:supportsRtl="true">
+        android:supportsRtl="true"
+        android:usesCleartextTraffic="true">
 
         <!-- The main screen: people, calls and texts together. It also takes "dial this number" and
              "text this number" from other apps, which Android needs to offer it as the default. -->

@@ -82,6 +82,7 @@ import codes.gibber.phone.data.Calls
 import codes.gibber.phone.data.Contacts
 import codes.gibber.phone.data.History
 import codes.gibber.phone.data.GroupNames
+import codes.gibber.phone.data.Sorting
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.AlertDialog
@@ -270,7 +271,7 @@ fun PersonScreen(main: MainActivity, screen: Screen.Person, resumes: Int) {
         }
 
         if (naming) {
-            var name by remember { mutableStateOf(GroupNames.get(main, addresses) ?: "") }
+            var name by remember { mutableStateOf(GroupNames.get(main, addresses) ?: Sorting.groupName(main, addresses) ?: "") }
             AlertDialog(
                 onDismissRequest = { naming = false },
                 title = { Text("Name this group") },
@@ -301,12 +302,14 @@ fun PersonScreen(main: MainActivity, screen: Screen.Person, resumes: Int) {
         ) {
             if (group && renamed >= 0 && phoneName == null && !GroupNames.asked(main, addresses)) {
                 item(key = "name-group") {
-                    var name by remember { mutableStateOf("") }
+                    // Claude's name for it, from the sorting on your PC, is filled in for you to keep or change.
+                    val suggested = remember { Sorting.groupName(main, addresses) }
+                    var name by remember { mutableStateOf(suggested ?: "") }
                     Column(
                         Modifier.padding(vertical = 6.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Ink.Card).padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        Text("New group. Give it a name?", color = Ink.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text(if (suggested != null) "Claude suggests this name. Keep it?" else "New group. Give it a name?", color = Ink.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                         OutlinedTextField(name, { name = it }, singleLine = true, placeholder = { Text("Group name") }, modifier = Modifier.fillMaxWidth())
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             Pill("Save") {

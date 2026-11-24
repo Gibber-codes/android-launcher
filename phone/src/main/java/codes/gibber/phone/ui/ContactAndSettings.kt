@@ -26,7 +26,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -52,6 +55,7 @@ import codes.gibber.phone.Updater
 import codes.gibber.phone.data.ContactForm
 import codes.gibber.phone.data.Contacts
 import codes.gibber.phone.data.FormRow
+import codes.gibber.phone.data.Sorting
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -189,6 +193,10 @@ fun SettingsScreen(main: MainActivity, resumes: Int) {
     val texts = remember(resumes) { main.isDefaultTexts() }
     val missing = remember(resumes) { main.missingPermissions() }
     var update by remember { mutableStateOf<String?>(null) }
+    var hub by remember { mutableStateOf(Sorting.address(main)) }
+    var editingHub by remember { mutableStateOf(false) }
+    var sending by remember { mutableStateOf<String?>(null) }
+    var fetching by remember { mutableStateOf<String?>(null) }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -217,6 +225,26 @@ fun SettingsScreen(main: MainActivity, resumes: Int) {
                     Toast.makeText(main, "Make People your calls app first.", Toast.LENGTH_SHORT).show()
                 }
             }
+            SettingRow("Gibber Hub", hub.ifBlank { "Your PC's address, to sort contacts with Claude" }, if (hub.isBlank()) "Set" else "Change") {
+                editingHub = true
+            }
+            if (hub.isNotBlank()) {
+                val sent = Sorting.sentAt(main)
+                SettingRow(
+                    "Send to Gibber Hub",
+                    sending ?: if (sent > 0) "Last sent ${whenText(sent)}. Your contacts and newest texts go to your PC only" else "Your contacts and newest texts go to your PC only, for Claude to sort",
+                    "Send",
+                ) {
+                    if (sending == null || !sending!!.endsWith("…")) scope.launch { sending = Sorting.send(main) { sending = it } }
+                }
+                SettingRow("Claude's sorting", fetching ?: if (Sorting.fetchedAt(main) > 0) Sorting.summary(Sorting.sorted(main)) else "Not picked up yet", "Get") {
+                    scope.launch {
+                        fetching = "Checking…"
+                        fetching = Sorting.fetch(main)
+                        PhoneApp.instance.bump()
+                    }
+                }
+            }
             SettingRow("Text storage", "Copies how this phone keeps texts, no messages, to send to Claude", "Copy") {
                 scope.launch {
                     val info = withContext(Dispatchers.IO) { codes.gibber.phone.data.Texts.storageInfo(main) }
@@ -227,6 +255,27 @@ fun SettingsScreen(main: MainActivity, resumes: Int) {
             SettingRow("Version", update ?: "Build ${BuildConfig.VERSION_CODE}", "Update") {
                 scope.launch { update = Updater.run(main) { update = it } }
             }
+        }
+        if (editingHub) {
+            var typed by remember { mutableStateOf(hub.ifBlank { "http://192.168.1.216:5175" }) }
+            AlertDialog(
+                onDismissRequest = { editingHub = false },
+                title = { Text("Gibber Hub's address") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("The same address the launcher uses: your PC on this Wi-Fi.", fontSize = 14.sp)
+                        OutlinedTextField(typed, { typed = it }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri))
+                    }
+                },
+                confirmButton = {
+                    TextButton({
+                        Sorting.setAddress(main, typed)
+                        hub = Sorting.address(main)
+                        editingHub = false
+                    }) { Text("Save") }
+                },
+                dismissButton = { TextButton({ editingHub = false }) { Text("Cancel") } },
+            )
         }
     }
 }

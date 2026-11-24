@@ -31,9 +31,9 @@ object GroupNames {
     fun skip(context: Context, addresses: Collection<String>) =
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit().putBoolean("skip:" + keyOf(addresses), true).apply()
 
-    /** The group's name (yours first, then the phone's own), or its people's first names. */
+    /** The group's name (yours first, then the phone's own, then Claude's), or its people's first names. */
     fun title(context: Context, addresses: List<String>, phoneName: String? = null): String =
-        get(context, addresses) ?: phoneName ?: addresses.joinToString(", ") { a ->
+        get(context, addresses) ?: phoneName ?: Sorting.groupName(context, addresses) ?: addresses.joinToString(", ") { a ->
             Contacts.lookup(context, a)?.name?.substringBefore(' ') ?: Numbers.pretty(a)
         }
 }
