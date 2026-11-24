@@ -95,6 +95,23 @@ fun LauncherApp(
             }
         }
 
+        // A game you installed from Chrome (same name as the game) lends it its picture and address.
+        LaunchedEffect(apps) {
+            var newLive = false
+            prefs.hubGames.forEach { (id, name) ->
+                val copy = apps.firstOrNull {
+                    !HubGames.isGame(it) && !HubLink.isOwn(it) && it.label.trim().equals(name.trim(), ignoreCase = true)
+                } ?: return@forEach
+                Apps.iconDrawable(context, copy)?.let { GameIcons.fromInstalled(context, id, it) }
+                val address = Apps.webAppAddress(context, copy)
+                if (address != null && prefs.liveUrl(id).isBlank()) {
+                    prefs.setLiveUrl(id, address)
+                    newLive = true
+                }
+            }
+            if (newLive) onAppsChanged()
+        }
+
         // Keep the hub's games up to date, whenever you come back to the launcher.
         LaunchedEffect(resumes, hubUrl) {
             val found = if (hubUrl.isBlank()) null else HubApi(hubUrl).workspaces()

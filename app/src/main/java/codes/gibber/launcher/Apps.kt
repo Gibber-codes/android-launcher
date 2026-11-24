@@ -68,6 +68,26 @@ object Apps {
             else -> appIcon(context, app, sizePx)
         }
 
+    /** The icon of an app or pinned shortcut as Android gives it, not yet drawn. */
+    fun iconDrawable(context: Context, app: AppEntry): Drawable? =
+        if (Shortcuts.isShortcut(app)) Shortcuts.iconDrawable(context, app)
+        else try {
+            context.packageManager.getActivityIcon(ComponentName(app.packageName, app.activityName))
+        } catch (e: Exception) {
+            null
+        }
+
+    /** The address a web app installed from Chrome opens, when it is one. */
+    fun webAppAddress(context: Context, app: AppEntry): String? = try {
+        if (Shortcuts.isShortcut(app)) null
+        else context.packageManager
+            .getApplicationInfo(app.packageName, android.content.pm.PackageManager.GET_META_DATA)
+            .metaData?.getString("org.chromium.webapk.shell_apk.startUrl")
+            ?.takeIf { it.startsWith("https://") }
+    } catch (e: Exception) {
+        null
+    }
+
     private fun appIcon(context: Context, app: AppEntry, sizePx: Int): Bitmap? = try {
         val d = context.packageManager.getActivityIcon(ComponentName(app.packageName, app.activityName))
         d.toBitmap(sizePx)

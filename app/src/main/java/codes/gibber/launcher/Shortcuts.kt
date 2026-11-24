@@ -60,6 +60,15 @@ object Shortcuts {
         }
     }
 
+    fun iconDrawable(context: Context, app: AppEntry): android.graphics.drawable.Drawable? = try {
+        info(app)?.let {
+            context.getSystemService(LauncherApps::class.java)
+                ?.getShortcutIconDrawable(it, context.resources.displayMetrics.densityDpi)
+        }
+    } catch (e: Exception) {
+        null
+    }
+
     fun loadIcon(context: Context, app: AppEntry, sizePx: Int): Bitmap? = try {
         val info = info(app)
         val d = info?.let {

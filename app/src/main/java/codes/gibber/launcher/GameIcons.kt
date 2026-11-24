@@ -72,6 +72,34 @@ object GameIcons {
         withContext(Dispatchers.Main) { version++ }
     }
 
+    /**
+     * The picture of a copy of the game installed on the phone, like Dead Tide added from Chrome.
+     * It beats a picture found on the web or a snapshot, and gives way only to one you chose.
+     */
+    suspend fun fromInstalled(context: Context, id: String, icon: android.graphics.drawable.Drawable) {
+        if (kindOf(context, id) == "chosen") return
+        val bmp = withContext(Dispatchers.Default) { fullBleed(icon, 256) }
+        save(context, id, bmp, "app")
+    }
+
+    /** Draws an icon edge to edge, without the phone's own mask, so it can be cut like the rest. */
+    private fun fullBleed(d: android.graphics.drawable.Drawable, size: Int): Bitmap {
+        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val c = android.graphics.Canvas(bmp)
+        if (d is android.graphics.drawable.AdaptiveIconDrawable) {
+            // Adaptive icon layers are 108 units with the middle 72 shown, so draw them half again as big.
+            val extra = size / 4
+            listOfNotNull(d.background, d.foreground).forEach {
+                it.setBounds(-extra, -extra, size + extra, size + extra)
+                it.draw(c)
+            }
+        } else {
+            d.setBounds(0, 0, size, size)
+            d.draw(c)
+        }
+        return bmp
+    }
+
     /** A picture from the game itself while you play, kept only when the game has no picture yet. */
     suspend fun snapshot(context: Context, id: String, shot: Bitmap) {
         if (kindOf(context, id) != null) return
@@ -120,7 +148,7 @@ object GameIcons {
             val f = file(context, id)
             val now = System.currentTimeMillis()
             val kind = kindOf(context, id)
-            if (kind == "chosen") return@forEach
+            if (kind == "chosen" || kind == "app") return@forEach
             if (kind == "found" && now - f.lastModified() < 6 * 3_600_000L) return@forEach
             val last = lastTry[id]
             if (last != null && last.second == bases && now - last.first < 10 * 60_000L) return@forEach
