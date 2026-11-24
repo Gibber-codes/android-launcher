@@ -10,7 +10,9 @@ object Sections {
     const val HIDDEN = "Hidden"
 
     val PAGES = listOf(
-        LauncherPage("Home", listOf("Contact", "Money", "Media", "Social", "Play", "Maps", "Work", "Tools", "Other"), workspace = false),
+        // Home keeps to three sections; every other app waits in the swipe-up list
+        // (Social, Play, Maps, Work, Tools and Other are guesses that don't show on a page).
+        LauncherPage("Home", listOf("Contact", "Money", "Media"), workspace = false),
         LauncherPage("Dev", listOf("My games", "Code", "AI"), workspace = true),
         LauncherPage("Mechanic", listOf("Jobs", "Parts", "Mechanic tools"), workspace = true),
     )

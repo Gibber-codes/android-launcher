@@ -273,14 +273,6 @@ fun PageScreen(
                     }
                 }
             }
-            if (!page.workspace) item(key = "hint") {
-                Text(
-                    "Hold an app to move, merge or remove it. Hold a section's name to edit several. Hold the wallpaper for widgets.",
-                    color = Color.White.copy(alpha = 0.5f),
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                )
-            }
         }
     }
 
