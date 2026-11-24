@@ -71,7 +71,8 @@ class Prefs(context: Context) {
     fun setLiveUrl(game: String, url: String) = sp.edit().putString("game_live_$game", url.trim()).apply()
 
     /** The Claude chat link you pasted for a project ("dev" for the Dev page's own), or "". */
-    fun chatLink(project: String): String = sp.getString("chat_link_$project", "")!!
+    fun chatLink(project: String): String =
+        sp.getString("chat_link_$project", null) ?: STARTING_CHATS[project].orEmpty()
     fun setChatLink(project: String, url: String) = sp.edit().putString("chat_link_$project", url.trim()).apply()
 
     /** Older versions you saved for a game: name to address. */
@@ -113,5 +114,10 @@ class Prefs(context: Context) {
         const val KEY_GAMES_ADDED = "games_added"
         const val KEY_GAMES_REMOVED = "games_removed"
         const val KEY_DEV_URL = "dev_url"
+    }
+
+    private companion object {
+        /** Chats made for a project before you set one here; a link you save or clear replaces it. */
+        val STARTING_CHATS = mapOf("dead-tide" to "https://claude.ai/messages/chan_018pCSnEXzVGWzmqMBh91Byk")
     }
 }
