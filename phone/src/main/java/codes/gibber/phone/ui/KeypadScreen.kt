@@ -58,7 +58,7 @@ import codes.gibber.phone.data.Person
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private val keys = listOf(
+private val keyRows = listOf(
     listOf("1" to "", "2" to "ABC", "3" to "DEF"),
     listOf("4" to "GHI", "5" to "JKL", "6" to "MNO"),
     listOf("7" to "PQRS", "8" to "TUV", "9" to "WXYZ"),
@@ -66,7 +66,7 @@ private val keys = listOf(
 )
 
 private val letterDigit: Map<Char, Char> = HashMap<Char, Char>().apply {
-    for (row: List<Pair<String, String>> in keys) {
+    for (row: List<Pair<String, String>> in keyRows) {
         for (pair: Pair<String, String> in row) {
             for (l: Char in pair.second) put(l.lowercaseChar(), pair.first[0])
         }
@@ -133,7 +133,7 @@ fun KeypadScreen(main: MainActivity, start: String) {
         }
         Spacer(Modifier.height(8.dp))
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            for (row in keys) {
+            for (row in keyRows) {
                 Row(horizontalArrangement = Arrangement.spacedBy(26.dp)) {
                     for ((d, letters) in row) {
                         Box(
