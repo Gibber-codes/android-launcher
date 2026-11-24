@@ -130,6 +130,7 @@ fun PageScreen(
         add(RowAction("Merge with another app") { mergeFor = app })
         add(RowAction("Move to a section") { onAskMove(app) })
         if (!Shortcuts.isShortcut(app) && !HubLink.isOwn(app)) add(RowAction("App info") { Apps.openInfo(context, app) })
+        if (Apps.canUninstall(context, app)) add(RowAction("Uninstall") { Apps.uninstall(context, app) })
     }
 
     Column(

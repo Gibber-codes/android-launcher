@@ -101,6 +101,30 @@ object Apps {
     fun games(apps: List<AppEntry>, added: Set<String>, removed: Set<String>): List<AppEntry> =
         apps.filter { (it.isGame || it.key in added) && it.key !in removed }
 
+    /** An app you put on the phone, or an update to one it came with; not this launcher's own entries. */
+    fun canUninstall(context: Context, app: AppEntry): Boolean {
+        if (HubLink.isOwn(app) || Shortcuts.isShortcut(app)) return false
+        return try {
+            val info = context.packageManager.getApplicationInfo(app.packageName, 0)
+            val system = (info.flags and ApplicationInfo.FLAG_SYSTEM) != 0
+            !system || (info.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /** Android's own "Do you want to uninstall this app?"; the list updates when you come back. */
+    @Suppress("DEPRECATION")
+    fun uninstall(context: Context, app: AppEntry) {
+        val intent = Intent(Intent.ACTION_UNINSTALL_PACKAGE, Uri.parse("package:${app.packageName}"))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            openInfo(context, app)
+        }
+    }
+
     fun openInfo(context: Context, app: AppEntry) {
         val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${app.packageName}"))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

@@ -140,6 +140,7 @@ fun AppDrawer(
                                 })
                                 else -> add(RowAction("App info") { Apps.openInfo(context, app) })
                             }
+                            if (Apps.canUninstall(context, app)) add(RowAction("Uninstall") { Apps.uninstall(context, app) })
                         },
                     )
                 }
