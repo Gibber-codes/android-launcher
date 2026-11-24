@@ -70,6 +70,10 @@ class Prefs(context: Context) {
     fun liveUrl(game: String): String = sp.getString("game_live_$game", "")!!
     fun setLiveUrl(game: String, url: String) = sp.edit().putString("game_live_$game", url.trim()).apply()
 
+    /** The Claude chat link you pasted for a project ("dev" for the Dev page's own), or "". */
+    fun chatLink(project: String): String = sp.getString("chat_link_$project", "")!!
+    fun setChatLink(project: String, url: String) = sp.edit().putString("chat_link_$project", url.trim()).apply()
+
     /** Older versions you saved for a game: name to address. */
     fun versions(game: String): List<Pair<String, String>> =
         lines("game_versions_$game").mapNotNull { l -> l.split('\t').takeIf { it.size >= 2 }?.let { it[0] to it[1] } }

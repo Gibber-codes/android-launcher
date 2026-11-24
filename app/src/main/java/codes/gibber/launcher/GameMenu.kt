@@ -7,6 +7,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -107,6 +108,8 @@ fun GameMenu(
     var adding by remember(id) { mutableStateOf(false) }
     var versionName by remember(id) { mutableStateOf("") }
     var versionUrl by remember(id) { mutableStateOf("") }
+    var chatLink by remember(id) { mutableStateOf(prefs.chatLink(id)) }
+    var editingChat by remember(id) { mutableStateOf(false) }
 
     val api = remember(hubUrl) { if (hubUrl.isBlank()) null else HubApi(hubUrl) }
     var workspace by remember(id) { mutableStateOf<HubWorkspace?>(null) }
@@ -128,6 +131,14 @@ fun GameMenu(
 
     val w = workspace
     val running = w?.state == "up"
+
+    if (editingChat) {
+        ChatLinkDialog(name, chatLink, onClose = { editingChat = false }) {
+            prefs.setChatLink(id, it)
+            chatLink = it
+            if (it.isNotBlank()) ClaudeChat.open(context, it)
+        }
+    }
 
     // While the dev server runs, fetch the game's own picture from it, so its icon shows from then on.
     LaunchedEffect(running, id) {
@@ -223,7 +234,7 @@ fun GameMenu(
                 }
             }
 
-            // Two pills: Dev build (only while the dev server runs) and Style.
+            // Dev build (only while the dev server runs), Style, and Talk: this game's own Claude chat.
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (running && api != null && w != null) {
                     val first = w.nav.firstOrNull { !it.name.contains("style", ignoreCase = true) }
@@ -239,6 +250,14 @@ fun GameMenu(
                         if (style == null) "$name's style guide isn't set up yet." else "Turn on the dev server to open the style guide.",
                         Toast.LENGTH_LONG,
                     ).show()
+                }
+                Pill(
+                    "Talk",
+                    Modifier.weight(1f),
+                    lead = { MicMark(16.dp) },
+                    onLongClick = { editingChat = true },
+                ) {
+                    if (chatLink.isBlank()) editingChat = true else ClaudeChat.open(context, chatLink)
                 }
             }
 
@@ -324,12 +343,14 @@ fun GameMenu(
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun Pill(
     label: String,
     modifier: Modifier = Modifier,
     strong: Boolean = false,
     lead: (@Composable () -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     Row(
@@ -339,7 +360,7 @@ private fun Pill(
             .height(34.dp)
             .clip(RoundedCornerShape(17.dp))
             .background(if (strong) Lilac else PillBg)
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 10.dp),
     ) {
         if (lead != null) {

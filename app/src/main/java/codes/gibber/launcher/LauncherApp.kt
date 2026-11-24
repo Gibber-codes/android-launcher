@@ -199,6 +199,7 @@ fun LauncherApp(
                     // Gibber Settings sits as a small button at the top right of the Dev page.
                     titleAction = if (page.name == "Dev") ({ GearButton { settingsOpen = true } }) else null,
                     onGroupsChange = { groups = it; prefs.groups = it },
+                    top = if (page.name == "Dev") ({ TalkToClaude(prefs) }) else null,
                     widgets = {
                         WidgetArea(
                             ids = widgetIds,

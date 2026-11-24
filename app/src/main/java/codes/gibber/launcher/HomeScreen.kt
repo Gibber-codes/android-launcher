@@ -68,6 +68,8 @@ fun PageScreen(
     titleAction: (@Composable () -> Unit)? = null,
     onGroupsChange: (List<AppGroup>) -> Unit = {},
     widgets: @Composable () -> Unit = {},
+    /** Something wide at the top of a page, above its sections, like Dev's Talk to Claude. */
+    top: (@Composable () -> Unit)? = null,
 ) {
     val context = LocalContext.current
     // Holding an app opens its own menu; this keeps that hold from also opening the wallpaper's menu.
@@ -218,6 +220,7 @@ fun PageScreen(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 28.dp),
         ) {
             if (!page.workspace) item(key = "widgets") { widgets() }
+            if (top != null) item(key = "top") { top() }
             page.sections.forEach { name ->
                 val inIt = cells[name].orEmpty()
                 // Home shows only sections with apps; a workspace shows all of its sections, so you can fill them.
