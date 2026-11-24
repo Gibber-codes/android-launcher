@@ -65,8 +65,12 @@ private val keys = listOf(
     listOf("*" to "", "0" to "+", "#" to ""),
 )
 
-private val letterDigit: Map<Char, Char> = buildMap {
-    for (row in keys) for ((d, letters) in row) for (l in letters) put(l.lowercaseChar(), d[0])
+private val letterDigit: Map<Char, Char> = HashMap<Char, Char>().apply {
+    for (row: List<Pair<String, String>> in keys) {
+        for (pair: Pair<String, String> in row) {
+            for (l: Char in pair.second) put(l.lowercaseChar(), pair.first[0])
+        }
+    }
 }
 
 /** "Jo Smith" as keypad digits: 56 76484, so typing 56 finds Jo. */
