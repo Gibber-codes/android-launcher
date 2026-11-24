@@ -110,7 +110,7 @@ fun TalkToClaude(prefs: Prefs) {
         Column(Modifier.weight(1f)) {
             Text("Talk to Claude", color = Look.Cream, fontSize = 16.sp, fontWeight = FontWeight.Medium)
             Text(
-                if (link.isBlank()) "Hold to set the chat it opens" else "Opens your Dev chat",
+                if (link.isBlank()) "Hold to set the chat it opens" else "Opens your app-launcher chat · hold to change",
                 color = Look.Muted,
                 fontSize = 12.sp,
             )

@@ -116,6 +116,9 @@ class Prefs(context: Context) {
         const val KEY_DEV_URL = "dev_url"
 
         /** Chats made for a project before you set one here; a link you save or clear replaces it. */
-        val STARTING_CHATS = mapOf("dead-tide" to "https://claude.ai/messages/chan_018pCSnEXzVGWzmqMBh91Byk")
+        val STARTING_CHATS = mapOf(
+            "dev" to "https://claude.ai/messages/chan_01VgWu5jsjdmdRX1ruft5fHX",
+            "dead-tide" to "https://claude.ai/messages/chan_018pCSnEXzVGWzmqMBh91Byk",
+        )
     }
 }
