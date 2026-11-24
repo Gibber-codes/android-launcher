@@ -83,11 +83,14 @@ object Sections {
     /** The section an app goes in: where you moved it, else a good guess from what it is. */
     fun of(app: AppEntry, moved: Map<String, String>, hubProjects: Set<String>): String {
         moved[app.key]?.let { m -> return RENAMED[m] ?: m }
+        // A game's live app waits in the app list; its menu icon sits on the Dev page.
+        if (HubGames.isLive(app)) return "Play"
         if (HubGames.isGame(app)) return if (HubGames.idOf(app) in hubProjects) "Code" else "My games"
         if (HubLink.isSettings(app)) return "Dev tools"
         if (HubLink.isOwn(app)) return "Code"
         // Claude Duet and other Claude apps, by name, since their package names vary.
         if (app.label.contains("Claude", ignoreCase = true) || app.label.contains("Gemini", ignoreCase = true)) return "AI"
+        if (app.label.contains("JBL", ignoreCase = true)) return "Media"
         if (Shortcuts.isShortcut(app)) return "Other"
         KNOWN[app.packageName]?.let { return it }
         if (app.isGame) return "Play"

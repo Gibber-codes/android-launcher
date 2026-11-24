@@ -3,33 +3,34 @@ package codes.gibber.launcher
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -41,8 +42,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -53,7 +57,18 @@ import kotlinx.coroutines.launch
 /** A game to open: the page's address, and which game it is (for landscape). */
 data class GamePage(val url: String, val game: String)
 
-private val Faint = Color.White.copy(alpha = 0.6f)
+// The design's colours.
+private val Card = Color(0xFF1F1E23)
+private val Line = Color(0xFF34333A)
+private val PillBg = Color(0xFF2A2930)
+private val Cream = Color(0xFFF7F1EA)
+private val Sage = Color(0xFFBABF95)
+private val Lilac = Color(0xFFC39CDC)
+private val Muted = Color(0xFFA39EA6)
+private val Ink = Color(0xFF101012)
+
+/** Stand-ins for a game's style colours until the game's real ones are read in. */
+private val StyleDots = listOf(Color(0xFF1F6F7A), Color(0xFFE0A85A), Color(0xFFC9473B))
 
 /** Adds https:// when the address was typed without it. */
 private fun webAddress(raw: String): String {
@@ -64,10 +79,10 @@ private fun webAddress(raw: String): String {
 private fun hostOf(url: String): String = Uri.parse(url).host ?: url
 
 /**
- * What tapping a hub game shows: play the live version, an older one you saved, and in dev
- * mode the dev server on your PC.
+ * What tapping a game on the Dev page shows: a small card over the dimmed page. Its top line has
+ * the game and a switch for the dev server on your PC; under it, Dev build (while the server runs)
+ * and Style; then Older versions, which opens to the versions you saved and the live address.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun GameMenu(
     id: String,
@@ -76,6 +91,7 @@ fun GameMenu(
     hubUrl: String,
     devMode: Boolean,
     onPlay: (GamePage) -> Unit,
+    onLiveChanged: () -> Unit = {},
     onClose: () -> Unit,
 ) {
     BackHandler(enabled = true) { onClose() }
@@ -83,9 +99,10 @@ fun GameMenu(
     val scope = rememberCoroutineScope()
 
     var live by remember(id) { mutableStateOf(prefs.liveUrl(id)) }
-    var editingLive by remember(id) { mutableStateOf(prefs.liveUrl(id).isBlank()) }
+    var editingLive by remember(id) { mutableStateOf(false) }
     var liveDraft by remember(id) { mutableStateOf(prefs.liveUrl(id)) }
     var versions by remember(id) { mutableStateOf(prefs.versions(id)) }
+    var olderOpen by remember(id) { mutableStateOf(false) }
     var adding by remember(id) { mutableStateOf(false) }
     var versionName by remember(id) { mutableStateOf("") }
     var versionUrl by remember(id) { mutableStateOf("") }
@@ -108,7 +125,43 @@ fun GameMenu(
         }
     }
 
-    // A dimmed backdrop; tapping it closes the menu.
+    val w = workspace
+    val running = w?.state == "up"
+    val on = running || w?.state == "starting"
+    val (status, statusColor) = when {
+        !devMode -> "" to Muted
+        api == null -> "Add your hub's address in Gibber Settings" to Muted
+        reached == null -> "Asking your PC…" to Muted
+        reached == false -> "Can't reach your PC" to Muted
+        w == null -> "Gibber Hub doesn't list this game" to Muted
+        busy -> "Working…" to Muted
+        running -> "Running on your PC" to Sage
+        w?.state == "starting" -> "Starting…" to Sage
+        w?.state == "other" -> "Something else has port ${w?.port}" to Color(0xFFE58FB3)
+        else -> "Off" to Muted
+    }
+    val canSwitch = devMode && w != null && w.startable && !busy && w.state != "other"
+
+    fun flip(turnOn: Boolean) {
+        val hub = api ?: return
+        val ws = w ?: return
+        busy = true
+        scope.launch {
+            val problem = hub.press(if (turnOn) "start" else "stop", ws.id)
+            if (problem != null) Toast.makeText(context, problem, Toast.LENGTH_LONG).show()
+            readState()
+            busy = false
+        }
+    }
+
+    // The game's own picture, or its letter icon until that's found.
+    val artPx = with(LocalDensity.current) { 44.dp.roundToPx() }
+    val art = remember(id, GameIcons.version) {
+        GameIcons.cached(context, id, artPx)
+            ?: HubGames.tile(AppEntry(label = name, packageName = context.packageName, activityName = "hub-game:$id"), artPx)
+    }
+
+    // The dimmed page behind; tapping it closes the card.
     Box(
         Modifier
             .fillMaxSize()
@@ -116,176 +169,144 @@ fun GameMenu(
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClose() }
     ) {
         Column(
-            Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-                .background(Color.Black)
-                .border(1.dp, Color.White.copy(alpha = 0.7f), RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-                // Taps inside the menu stay in the menu.
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
-                .navigationBarsPadding()
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier
+                .align(Alignment.Center)
                 .imePadding()
+                .fillMaxWidth(0.8f)
+                .widthIn(max = 340.dp)
+                .heightIn(max = 560.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(Card)
+                .border(1.dp, Line, RoundedCornerShape(16.dp))
+                // Taps inside the card stay in the card.
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
                 .verticalScroll(rememberScrollState())
-                .padding(20.dp)
+                .padding(12.dp),
         ) {
-            Text(name, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(16.dp))
-
-            // The live version.
-            if (live.isNotBlank() && !editingLive) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Chip("Play", strong = true) { onPlay(GamePage(live, id)) }
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("Live version", color = Color.White, fontSize = 15.sp)
-                        Text(hostOf(live), color = Faint, fontSize = 12.sp, maxLines = 1)
+            // Top line: the game, and the dev server's switch.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Image(art.asImageBitmap(), contentDescription = null, modifier = Modifier.size(44.dp))
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(name, color = Cream, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    if (devMode) {
+                        Text("Dev server", color = Cream, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                        Text(status, color = statusColor, fontSize = 11.sp, maxLines = 2)
                     }
-                    Text(
-                        "Change",
-                        color = Faint,
-                        fontSize = 13.sp,
-                        modifier = Modifier.clickable { liveDraft = live; editingLive = true }.padding(8.dp),
+                }
+                if (devMode) {
+                    Spacer(Modifier.width(8.dp))
+                    Switch(
+                        checked = on,
+                        onCheckedChange = { flip(it) },
+                        enabled = canSwitch,
+                        colors = SwitchDefaults.colors(
+                            checkedTrackColor = Lilac,
+                            checkedThumbColor = Ink,
+                            checkedBorderColor = Lilac,
+                            uncheckedTrackColor = PillBg,
+                            uncheckedThumbColor = Muted,
+                            uncheckedBorderColor = Line,
+                        ),
                     )
                 }
-            } else {
-                Text("Live version", color = Color.White, fontSize = 15.sp)
-                Text("Paste the address of your Netlify site.", color = Faint, fontSize = 12.sp)
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = liveDraft,
-                    onValueChange = { liveDraft = it },
-                    placeholder = { Text("your-site.netlify.app") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Chip("Save", strong = true) {
-                        val url = webAddress(liveDraft)
-                        prefs.setLiveUrl(id, url)
-                        live = url
-                        editingLive = url.isBlank()
+            }
+
+            // Two pills: Dev build (only while the dev server runs) and Style.
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (running && api != null && w != null) {
+                    val first = w.nav.firstOrNull { !it.name.contains("style", ignoreCase = true) }
+                    Pill("Dev build", Modifier.weight(1f), lead = { PlayMark() }) {
+                        onPlay(GamePage(api.pageOf(w, first?.path ?: "/"), id))
                     }
-                    if (live.isNotBlank()) Chip("Cancel") { editingLive = false }
+                }
+                Pill("Style", Modifier.weight(1f), lead = { Dots() }) {
+                    val style = w?.nav?.firstOrNull { it.name.contains("style", ignoreCase = true) }
+                    if (running && api != null && w != null && style != null) onPlay(GamePage(api.pageOf(w, style.path), id))
+                    else Toast.makeText(
+                        context,
+                        if (style == null) "$name's style guide isn't set up yet." else "Turn on the dev server to open the style guide.",
+                        Toast.LENGTH_LONG,
+                    ).show()
                 }
             }
 
-            // Older versions you saved.
-            Spacer(Modifier.height(20.dp))
-            Text("OLDER VERSIONS", color = Faint, fontSize = 12.sp, letterSpacing = 1.5.sp)
-            Spacer(Modifier.height(6.dp))
-            if (versions.isEmpty() && !adding) {
-                Text(
-                    "None saved yet. On Netlify, open Deploys, pick an older deploy and copy its address.",
-                    color = Faint,
-                    fontSize = 12.sp,
-                )
+            // Older versions: one dropdown with the versions you saved and the live address.
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(34.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .border(1.dp, Line, RoundedCornerShape(10.dp))
+                    .clickable { olderOpen = !olderOpen }
+                    .padding(horizontal = 12.dp),
+            ) {
+                Text("Older versions", color = Cream, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                Text("⌄", color = Muted, fontSize = 14.sp, modifier = Modifier.rotate(if (olderOpen) 180f else 0f).offset(y = (-3).dp))
             }
-            versions.forEachIndexed { i, (vName, vUrl) ->
-                VersionRow(
-                    name = vName,
-                    url = vUrl,
-                    onOpen = { onPlay(GamePage(vUrl, id)) },
-                    onRemove = {
-                        versions = versions.filterIndexed { j, _ -> j != i }
-                        prefs.setVersions(id, versions)
-                    },
-                )
-            }
-            Spacer(Modifier.height(8.dp))
-            if (adding) {
-                OutlinedTextField(
-                    value = versionName,
-                    onValueChange = { versionName = it },
-                    placeholder = { Text("Name, like v0.3 or before the boss fight") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Spacer(Modifier.height(6.dp))
-                OutlinedTextField(
-                    value = versionUrl,
-                    onValueChange = { versionUrl = it },
-                    placeholder = { Text("Its address") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Chip("Save", strong = true) {
-                        val url = webAddress(versionUrl)
-                        if (url.isNotBlank()) {
-                            versions = versions + ((versionName.trim().ifBlank { hostOf(url) }) to url)
+            if (olderOpen) {
+                versions.forEachIndexed { i, (vName, vUrl) ->
+                    LineRow(
+                        title = vName,
+                        sub = hostOf(vUrl),
+                        action = "Remove",
+                        onOpen = { onPlay(GamePage(vUrl, id)) },
+                        onAction = {
+                            versions = versions.filterIndexed { j, _ -> j != i }
                             prefs.setVersions(id, versions)
-                        }
-                        versionName = ""
-                        versionUrl = ""
-                        adding = false
-                    }
-                    Chip("Cancel") { adding = false }
+                        },
+                    )
                 }
-            } else {
-                Chip("Add a version") { adding = true }
-            }
+                if (versions.isEmpty() && !adding) {
+                    Text(
+                        "None saved yet. On Netlify, open Deploys, pick an older deploy and copy its address.",
+                        color = Muted,
+                        fontSize = 11.sp,
+                    )
+                }
+                if (adding) {
+                    Field(versionName, { versionName = it }, "Name, like v0.3")
+                    Field(versionUrl, { versionUrl = it }, "Its address", uri = true)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Pill("Save", Modifier.weight(1f), strong = true) {
+                            val url = webAddress(versionUrl)
+                            if (url.isNotBlank()) {
+                                versions = versions + ((versionName.trim().ifBlank { hostOf(url) }) to url)
+                                prefs.setVersions(id, versions)
+                            }
+                            versionName = ""
+                            versionUrl = ""
+                            adding = false
+                        }
+                        Pill("Cancel", Modifier.weight(1f)) { adding = false }
+                    }
+                } else {
+                    Pill("Add a version", Modifier.fillMaxWidth()) { adding = true }
+                }
 
-            // Dev mode: the dev server on your PC, through Gibber Hub.
-            if (devMode) {
-                Spacer(Modifier.height(20.dp))
-                Text("DEV SERVER ON YOUR PC", color = Faint, fontSize = 12.sp, letterSpacing = 1.5.sp)
-                Spacer(Modifier.height(8.dp))
-                val w = workspace
-                when {
-                    api == null -> Text("Add your hub's address in Gibber Settings first.", color = Faint, fontSize = 13.sp)
-                    reached == null -> Text("Asking your PC…", color = Faint, fontSize = 13.sp)
-                    reached == false -> Text("Couldn't reach your PC. Check that Gibber Hub is running and you're on home Wi-Fi.", color = Faint, fontSize = 13.sp)
-                    w == null -> Text("Gibber Hub doesn't list this game.", color = Faint, fontSize = 13.sp)
-                    else -> {
-                        val hub = api!!
-                        val w = w!!
-                        val (dot, words) = when {
-                            busy -> Color(0xFFE8B04B) to "Working…"
-                            w.state == "up" -> Color(0xFF5FD38A) to "Running"
-                            w.state == "starting" -> Color(0xFFE8B04B) to "Starting…"
-                            w.state == "other" -> Color(0xFFE06C6C) to "Something else has port ${w.port}"
-                            else -> Faint to "Off"
+                // The newest version's address, which the game's own app plays.
+                if (live.isNotBlank() && !editingLive) {
+                    LineRow(
+                        title = "Newest version",
+                        sub = hostOf(live),
+                        action = "Change",
+                        onOpen = { onPlay(GamePage(live, id)) },
+                        onAction = { liveDraft = live; editingLive = true },
+                    )
+                } else {
+                    Text("Newest version: paste your Netlify site's address.", color = Muted, fontSize = 11.sp)
+                    Field(liveDraft, { liveDraft = it }, "your-site.netlify.app", uri = true)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Pill("Save", Modifier.weight(1f), strong = true) {
+                            val url = webAddress(liveDraft)
+                            prefs.setLiveUrl(id, url)
+                            live = url
+                            editingLive = false
+                            onLiveChanged()
                         }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(8.dp).clip(CircleShape).background(dot))
-                            Spacer(Modifier.width(8.dp))
-                            Text(words, color = Color.White, fontSize = 15.sp, modifier = Modifier.weight(1f))
-                            if (!busy && w.startable) {
-                                val what = when (w.state) {
-                                    "up", "starting" -> "stop"
-                                    "down" -> "start"
-                                    else -> null
-                                }
-                                if (what != null) {
-                                    Chip(if (what == "start") "Start dev server" else "Stop", strong = what == "start") {
-                                        busy = true
-                                        scope.launch {
-                                            val problem = hub.press(what, w.id)
-                                            if (problem != null) Toast.makeText(context, problem, Toast.LENGTH_LONG).show()
-                                            readState()
-                                            busy = false
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        if (w.state == "up") {
-                            Spacer(Modifier.height(10.dp))
-                            val nav = w.nav.ifEmpty { listOf(HubNav("open", "Open", "/")) }
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                nav.forEachIndexed { i, n ->
-                                    Chip(n.name, strong = i == 0) { onPlay(GamePage(hub.pageOf(w, n.path), id)) }
-                                }
-                            }
-                        }
+                        if (live.isNotBlank()) Pill("Cancel", Modifier.weight(1f)) { editingLive = false }
                     }
                 }
             }
@@ -293,28 +314,78 @@ fun GameMenu(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun VersionRow(name: String, url: String, onOpen: () -> Unit, onRemove: () -> Unit) {
+private fun Pill(
+    label: String,
+    modifier: Modifier = Modifier,
+    strong: Boolean = false,
+    lead: (@Composable () -> Unit)? = null,
+    onClick: () -> Unit,
+) {
+    Row(
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .height(34.dp)
+            .clip(RoundedCornerShape(17.dp))
+            .background(if (strong) Lilac else PillBg)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp),
+    ) {
+        if (lead != null) {
+            lead()
+            Spacer(Modifier.width(6.dp))
+        }
+        Text(label, color = if (strong) Ink else Cream, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+    }
+}
+
+@Composable
+private fun PlayMark() = Text("▶", color = Cream, fontSize = 9.sp)
+
+@Composable
+private fun Dots() {
+    Row {
+        StyleDots.forEachIndexed { i, c ->
+            Box(
+                Modifier
+                    .offset(x = (-3 * i).dp)
+                    .size(9.dp)
+                    .clip(CircleShape)
+                    .background(c)
+            )
+        }
+    }
+}
+
+@Composable
+private fun LineRow(title: String, sub: String, action: String, onOpen: () -> Unit, onAction: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .combinedClickable(onClick = onOpen)
-            .padding(vertical = 8.dp),
+            .clickable(onClick = onOpen)
+            .padding(vertical = 4.dp),
     ) {
         Column(Modifier.weight(1f)) {
-            Text(name, color = Color.White, fontSize = 15.sp, maxLines = 1)
-            Text(hostOf(url), color = Faint, fontSize = 12.sp, maxLines = 1)
+            Text(title, color = Cream, fontSize = 13.sp, maxLines = 1)
+            Text(sub, color = Muted, fontSize = 11.sp, maxLines = 1)
         }
-        Text(
-            "Remove",
-            color = Faint,
-            fontSize = 13.sp,
-            modifier = Modifier.clickable(onClick = onRemove).padding(8.dp),
-        )
+        Text(action, color = Muted, fontSize = 12.sp, modifier = Modifier.clickable(onClick = onAction).padding(8.dp))
     }
+}
+
+@Composable
+private fun Field(value: String, onChange: (String) -> Unit, hint: String, uri: Boolean = false) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onChange,
+        placeholder = { Text(hint, fontSize = 12.sp) },
+        singleLine = true,
+        keyboardOptions = if (uri) KeyboardOptions(keyboardType = KeyboardType.Uri) else KeyboardOptions.Default,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 /** A game on top of everything, full screen, turned sideways when it's played that way. */

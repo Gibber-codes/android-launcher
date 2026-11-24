@@ -76,6 +76,7 @@ object Apps {
     }
 
     fun launch(context: Context, app: AppEntry) {
+        if (HubGames.isLive(app)) return HubGames.play(HubGames.idOf(app))
         if (HubGames.isGame(app)) return HubGames.open(HubGames.idOf(app))
         if (HubLink.isHub(app)) return HubLink.open()
         if (HubLink.isSettings(app)) return HubLink.openSettings()

@@ -86,6 +86,13 @@ fun LauncherApp(
                 drawerOpen = false
                 gameMenu = id
             }
+            HubGames.play = { id ->
+                val live = prefs.liveUrl(id)
+                if (live.isNotBlank()) {
+                    drawerOpen = false
+                    gamePage = GamePage(live, id)
+                }
+            }
         }
 
         // Keep the hub's games up to date, whenever you come back to the launcher.
@@ -95,7 +102,15 @@ fun LauncherApp(
             val pc = android.net.Uri.parse(hubUrl).host
             val ports = found.orEmpty().associate { it.id to it.port }
             // When the hub knows a game's live site, use it, unless you set one yourself.
-            found.orEmpty().forEach { w -> if (w.live != null && prefs.liveUrl(w.id).isBlank()) prefs.setLiveUrl(w.id, w.live) }
+            var newLive = false
+            found.orEmpty().forEach { w ->
+                if (w.live != null && prefs.liveUrl(w.id).isBlank()) {
+                    prefs.setLiveUrl(w.id, w.live)
+                    newLive = true
+                }
+            }
+            // A newly known live site makes the game's own app show in the app list.
+            if (newLive) onAppsChanged()
             GameIcons.refresh(
                 context,
                 (prefs.hubGames.map { it.first } + ports.keys).distinct().associateWith { id ->
@@ -128,6 +143,19 @@ fun LauncherApp(
         }
         // Coming back from an app closes the drawer.
         LaunchedEffect(resumes) { drawerOpen = false }
+
+        // A Music group on Home holding Spotify and the JBL app, made once both are installed.
+        LaunchedEffect(apps) {
+            if (prefs.musicMade) return@LaunchedEffect
+            val music = apps.filter { it.packageName == "com.spotify.music" } +
+                apps.filter { it.label.contains("JBL", ignoreCase = true) }
+            if (music.none { it.packageName == "com.spotify.music" } || music.size < 2) return@LaunchedEffect
+            val keys = music.map { it.key }.distinct()
+            val rest = groups.map { g -> g.copy(keys = g.keys - keys.toSet()) }.filter { it.keys.size >= 2 }
+            groups = rest + AppGroup("music", "Music", keys)
+            prefs.groups = groups
+            prefs.musicMade = true
+        }
 
         // A home screen has nowhere to go back to, so Back goes to the Home page and stops there.
         BackHandler(enabled = true) { scope.launch { pager.animateScrollToPage(0) } }
@@ -196,7 +224,10 @@ fun LauncherApp(
 
             if (drawerOpen) {
                 AppDrawer(
-                    apps = apps,
+                    // A game with a live app shows once in the list: as the app that plays it.
+                    apps = apps.filterNot { a ->
+                        HubGames.isMenu(a) && apps.any { HubGames.isLive(it) && HubGames.idOf(it) == HubGames.idOf(a) }
+                    },
                     favorites = favorites,
                     onFavoritesChange = ::saveFavorites,
                     onClose = { drawerOpen = false },
@@ -215,6 +246,7 @@ fun LauncherApp(
                     // Your games live on the Dev page, so their menus always offer the dev server.
                     devMode = true,
                     onPlay = { gamePage = it; gameMenu = null },
+                    onLiveChanged = onAppsChanged,
                     onClose = { gameMenu = null },
                 )
             }

@@ -81,6 +81,11 @@ class Prefs(context: Context) {
         get() = sp.getInt("notified_build", 0)
         set(value) = sp.edit().putInt("notified_build", value).apply()
 
+    /** The Music group (Spotify and the JBL app) is made once; after that it is yours to change. */
+    var musicMade: Boolean
+        get() = sp.getBoolean("music_made", false)
+        set(value) = sp.edit().putBoolean("music_made", value).apply()
+
     var askedNotifications: Boolean
         get() = sp.getBoolean("asked_notifications", false)
         set(value) = sp.edit().putBoolean("asked_notifications", value).apply()
