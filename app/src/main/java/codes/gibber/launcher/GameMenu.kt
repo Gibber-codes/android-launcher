@@ -18,9 +18,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -115,21 +115,22 @@ fun GameMenu(
             .background(Color.Black.copy(alpha = 0.6f))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClose() }
     ) {
+        // A pop-up in the middle of the screen, like a folder, over whatever page you were on.
         Column(
             Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-                .background(Color.Black)
-                .border(1.dp, Color.White.copy(alpha = 0.7f), RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                .align(Alignment.Center)
+                .imePadding()
+                .fillMaxWidth(0.88f)
+                .heightIn(max = 560.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(Color(0xFF15151A))
+                .border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(24.dp))
                 // Taps inside the menu stay in the menu.
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
-                .navigationBarsPadding()
-                .imePadding()
                 .verticalScroll(rememberScrollState())
-                .padding(20.dp)
+                .padding(18.dp)
         ) {
-            Text(name, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+            Text(name, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(16.dp))
 
             // The live version.
