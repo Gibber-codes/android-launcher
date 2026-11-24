@@ -8,6 +8,9 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancel
+import android.widget.Toast
 import android.provider.Telephony
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -136,9 +139,48 @@ class MainActivity : ComponentActivity() {
         while (stack.size > 1) stack.removeAt(stack.lastIndex)
     }
 
+    private val scope = kotlinx.coroutines.MainScope()
+
+    override fun onDestroy() {
+        super.onDestroy()
+        scope.cancel()
+    }
+
     override fun onResume() {
         super.onResume()
         resumes.intValue++
+        checkForUpdate()
+    }
+
+    /** A quiet look on GitHub; a new build posts the "Update ready" notification once. */
+    private fun checkForUpdate() {
+        if (!UpdateNotice.due()) return
+        scope.launch {
+            val release = Updater.newer()
+            if (release == null) {
+                UpdateNotice.clear(this@MainActivity)
+            } else if (UpdateNotice.shownFor(this@MainActivity) != release.build) {
+                UpdateNotice.setShownFor(this@MainActivity, release.build)
+                UpdateNotice.show(this@MainActivity, release.build)
+            }
+        }
+    }
+
+    private var updating = false
+
+    /** A tap on the notification: the same as Update in settings, without opening settings. */
+    private fun startUpdate() {
+        if (updating) return
+        updating = true
+        UpdateNotice.clear(this)
+        // If it doesn't go through, the next time Gibber Phone opens posts the notification again.
+        UpdateNotice.setShownFor(this, 0)
+        UpdateNotice.forget()
+        scope.launch {
+            val result = Updater.run(this@MainActivity) { if (it.startsWith("Downloading")) Toast.makeText(this@MainActivity, it, Toast.LENGTH_SHORT).show() }
+            Toast.makeText(this@MainActivity, result, Toast.LENGTH_LONG).show()
+            updating = false
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -149,6 +191,10 @@ class MainActivity : ComponentActivity() {
     /** Other apps asking to dial or text a number, and taps on our own notifications. */
     private fun handle(intent: Intent?) {
         intent ?: return
+        if (intent.action == UpdateNotice.ACTION) {
+            startUpdate()
+            return
+        }
         val data = intent.data
         when (intent.action) {
             Intent.ACTION_DIAL, Intent.ACTION_VIEW -> {

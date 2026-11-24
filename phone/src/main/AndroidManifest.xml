@@ -110,6 +110,7 @@
         </service>
 
         <receiver android:name=".call.CallActionReceiver" android:exported="false" />
+        <receiver android:name=".InstallResult" android:exported="false" />
 
         <!-- New texts arrive here while Gibber Phone is the default texting app. -->
         <receiver
