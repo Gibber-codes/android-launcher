@@ -84,7 +84,6 @@ fun HomeScreen(main: MainActivity, resumes: Int) {
 
     val missing = remember(resumes) { main.missingPermissions() }
     val defaultCalls = remember(resumes) { main.isDefaultCalls() }
-    val defaultTexts = remember(resumes) { main.isDefaultTexts() }
 
     val recent by produceState<List<RecentItem>?>(Recent.last, version, resumes) {
         value = withContext(Dispatchers.IO) { Recent.load(main, version) }
@@ -110,8 +109,9 @@ fun HomeScreen(main: MainActivity, resumes: Int) {
             }
             SearchBox(query, { query = it }, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
 
-            if (missing.isNotEmpty() || !defaultCalls || !defaultTexts) {
-                SetupCard(main, missing.isNotEmpty(), defaultCalls, defaultTexts)
+            // Texts can live in another app, like Google Messages, so the card only asks about calls.
+            if (missing.isNotEmpty() || !defaultCalls) {
+                SetupCard(main, missing.isNotEmpty(), defaultCalls)
             }
             if (pending.isNotEmpty()) {
                 Row(
@@ -146,7 +146,7 @@ fun HomeScreen(main: MainActivity, resumes: Int) {
 }
 
 @Composable
-private fun SetupCard(main: MainActivity, needsPermissions: Boolean, defaultCalls: Boolean, defaultTexts: Boolean) {
+private fun SetupCard(main: MainActivity, needsPermissions: Boolean, defaultCalls: Boolean) {
     Column(
         Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp))
             .background(Ink.Card).padding(14.dp),
@@ -155,7 +155,6 @@ private fun SetupCard(main: MainActivity, needsPermissions: Boolean, defaultCall
         Text("Finish setting up", color = Ink.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
         if (needsPermissions) SetupStep("Let People see your contacts, calls and texts", "Allow") { main.askForPermissions() }
         if (!defaultCalls) SetupStep("Use it for calls", "Make default") { main.askToBeDefault(RoleManager.ROLE_DIALER) }
-        if (!defaultTexts) SetupStep("Use it for texts", "Make default") { main.askToBeDefault(RoleManager.ROLE_SMS) }
     }
 }
 

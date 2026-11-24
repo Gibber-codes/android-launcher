@@ -280,6 +280,15 @@ class MainActivity : ComponentActivity() {
         return role || Telephony.Sms.getDefaultSmsPackage(this) == packageName
     }
 
+    /** The name of the app that handles texts now, like Messages, or null when it can't be read. */
+    fun textsAppName(): String? = try {
+        Telephony.Sms.getDefaultSmsPackage(this)?.let { pkg ->
+            packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
+        }
+    } catch (_: Exception) {
+        null
+    }
+
     /** Shows Android's own "use People as your default?" question. You answer it there. */
     fun askToBeDefault(role: String) {
         val rm = getSystemService(RoleManager::class.java)

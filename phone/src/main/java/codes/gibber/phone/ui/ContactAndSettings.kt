@@ -208,7 +208,7 @@ fun SettingsScreen(main: MainActivity, resumes: Int) {
                 if (calls) "Change" else "Make default") {
                 if (calls) main.startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)) else main.askToBeDefault(RoleManager.ROLE_DIALER)
             }
-            SettingRow("Texts", if (texts) "People handles your texts" else "Another app handles your texts",
+            SettingRow("Texts", if (texts) "People handles your texts" else "${main.textsAppName() ?: "Another app"} handles your texts. People still shows them.",
                 if (texts) "Change" else "Make default") {
                 if (texts) main.startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)) else main.askToBeDefault(RoleManager.ROLE_SMS)
             }

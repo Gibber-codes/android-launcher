@@ -37,6 +37,11 @@
     <queries>
         <package android:name="com.android.phone" />
         <package android:name="com.android.mms.service" />
+        <!-- So Settings can name the app that handles texts, like Google Messages. -->
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="smsto" />
+        </intent>
     </queries>
 
     <application
