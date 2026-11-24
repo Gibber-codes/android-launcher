@@ -86,6 +86,11 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("music_made", false)
         set(value) = sp.edit().putBoolean("music_made", value).apply()
 
+    /** The build that last started, so the first start after an update can say so. */
+    var seenBuild: Int
+        get() = sp.getInt("seen_build", 0)
+        set(value) = sp.edit().putInt("seen_build", value).apply()
+
     var askedNotifications: Boolean
         get() = sp.getBoolean("asked_notifications", false)
         set(value) = sp.edit().putBoolean("asked_notifications", value).apply()
