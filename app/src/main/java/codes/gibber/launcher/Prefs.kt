@@ -114,9 +114,7 @@ class Prefs(context: Context) {
         const val KEY_GAMES_ADDED = "games_added"
         const val KEY_GAMES_REMOVED = "games_removed"
         const val KEY_DEV_URL = "dev_url"
-    }
 
-    private companion object {
         /** Chats made for a project before you set one here; a link you save or clear replaces it. */
         val STARTING_CHATS = mapOf("dead-tide" to "https://claude.ai/messages/chan_018pCSnEXzVGWzmqMBh91Byk")
     }
