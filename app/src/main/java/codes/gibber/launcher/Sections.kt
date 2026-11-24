@@ -88,6 +88,7 @@ object Sections {
         if (HubLink.isOwn(app)) return "Code"
         // Claude Duet and other Claude apps, by name, since their package names vary.
         if (app.label.contains("Claude", ignoreCase = true) || app.label.contains("Gemini", ignoreCase = true)) return "AI"
+        if (app.label.contains("JBL", ignoreCase = true)) return "Media"
         if (Shortcuts.isShortcut(app)) return "Other"
         KNOWN[app.packageName]?.let { return it }
         if (app.isGame) return "Play"
