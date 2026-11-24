@@ -253,9 +253,21 @@ class MainActivity : ComponentActivity() {
     fun canReadTexts(): Boolean =
         ContextCompat.checkSelfPermission(this, Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
 
-    fun isDefaultCalls(): Boolean = getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_DIALER)
+    fun isDefaultCalls(): Boolean = try {
+        getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_DIALER)
+    } catch (_: Exception) {
+        false
+    }
 
-    fun isDefaultTexts(): Boolean = Telephony.Sms.getDefaultSmsPackage(this) == packageName
+    /** Asks Android both ways, since some phones answer the older question wrong once the texting role is set. */
+    fun isDefaultTexts(): Boolean {
+        val role = try {
+            getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_SMS)
+        } catch (_: Exception) {
+            false
+        }
+        return role || Telephony.Sms.getDefaultSmsPackage(this) == packageName
+    }
 
     /** Shows Android's own "use Gibber Phone as your default?" question. You answer it there. */
     fun askToBeDefault(role: String) {
