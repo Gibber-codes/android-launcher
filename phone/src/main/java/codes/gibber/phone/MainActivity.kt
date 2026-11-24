@@ -73,8 +73,22 @@ class MainActivity : ComponentActivity() {
         } catch (_: Exception) {
         }
     }
+    private var askedRole: String? = null
     private val askRole = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         resumes.intValue++
+        // If Android said no without asking (it blocks apps that weren't installed from a store until
+        // "Allow restricted settings" is on), open the Default apps page so it can be picked there.
+        val role = askedRole
+        askedRole = null
+        if (role != null && !getSystemService(RoleManager::class.java).isRoleHeld(role)) openDefaultApps()
+    }
+
+    fun openDefaultApps() {
+        try {
+            startActivity(Intent(android.provider.Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (_: Exception) {
+            openAppInfo()
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -200,7 +214,14 @@ class MainActivity : ComponentActivity() {
     /** Shows Android's own "use Gibber Phone as your default?" question. You answer it there. */
     fun askToBeDefault(role: String) {
         val rm = getSystemService(RoleManager::class.java)
-        if (rm.isRoleAvailable(role) && !rm.isRoleHeld(role)) askRole.launch(rm.createRequestRoleIntent(role))
+        if (!rm.isRoleAvailable(role) || rm.isRoleHeld(role)) return
+        askedRole = role
+        try {
+            askRole.launch(rm.createRequestRoleIntent(role))
+        } catch (_: Exception) {
+            askedRole = null
+            openDefaultApps()
+        }
     }
 
     companion object {
