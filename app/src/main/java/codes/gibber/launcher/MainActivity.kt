@@ -33,6 +33,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        try { Widgets.host(this).startListening() } catch (e: Exception) { }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        try { Widgets.host(this).stopListening() } catch (e: Exception) { }
+    }
+
     override fun onResume() {
         super.onResume()
         apps.value = Apps.load(this)

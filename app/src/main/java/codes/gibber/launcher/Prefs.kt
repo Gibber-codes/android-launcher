@@ -53,6 +53,11 @@ class Prefs(context: Context) {
         get() = lines(KEY_SECTIONS).mapNotNull { l -> l.split('\t').takeIf { it.size >= 2 }?.let { it[0] to it[1] } }.toMap()
         set(value) = putLines(KEY_SECTIONS, value.map { "${it.key}\t${it.value}" })
 
+    /** The widgets on the home screen, top to bottom. */
+    var widgets: List<Int>
+        get() = lines("widgets").mapNotNull { it.toIntOrNull() }
+        set(value) = putLines("widgets", value.map { it.toString() })
+
     /** A game's live address, like its Netlify site. */
     fun liveUrl(game: String): String = sp.getString("game_live_$game", "")!!
     fun setLiveUrl(game: String, url: String) = sp.edit().putString("game_live_$game", url.trim()).apply()

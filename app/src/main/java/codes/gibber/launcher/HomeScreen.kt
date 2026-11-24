@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -48,26 +51,22 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun HomeScreen(
+fun PageScreen(
+    page: LauncherPage,
     apps: List<AppEntry>,
-    favorites: List<String>,
-    onFavoritesChange: (List<String>) -> Unit,
     onOpenDrawer: () -> Unit,
     moved: Map<String, String>,
     hubProjects: Set<String>,
-    onMove: (AppEntry, String?) -> Unit,
-    devMode: Boolean,
-    onDevMode: (Boolean) -> Unit,
+    onAskMove: (AppEntry) -> Unit,
+    topBar: @Composable () -> Unit = {},
+    widgets: @Composable () -> Unit = {},
 ) {
     val context = LocalContext.current
-    val byKey = remember(apps) { apps.associateBy { it.key } }
-    val favApps = favorites.mapNotNull { byKey[it] }
     val grouped = remember(apps, moved, hubProjects) {
         apps.groupBy { Sections.of(it, moved, hubProjects) }
     }
-    var moving by remember { mutableStateOf<AppEntry?>(null) }
 
-    // Swiping up opens the app list: on empty space, or past the end of the home screen.
+    // Swiping up opens the app list: on empty space, or past the end of the page.
     val swipeUpPx = with(androidx.compose.ui.platform.LocalDensity.current) { 80.dp.toPx() }
     val openOnSwipeUp = remember(onOpenDrawer) {
         object : NestedScrollConnection {
@@ -89,21 +88,14 @@ fun HomeScreen(
     }
 
     fun actionsFor(app: AppEntry): List<RowAction> = buildList {
-        val i = favorites.indexOf(app.key)
-        if (i >= 0) {
-            if (i > 0) add(RowAction("Move up") { onFavoritesChange(favorites.swap(i, i - 1)) })
-            if (i < favorites.lastIndex) add(RowAction("Move down") { onFavoritesChange(favorites.swap(i, i + 1)) })
-            add(RowAction("Remove from favorites") { onFavoritesChange(favorites - app.key) })
-        } else {
-            add(RowAction("Add to favorites") { onFavoritesChange(favorites + app.key) })
-        }
-        add(RowAction("Move to a section") { moving = app })
+        add(RowAction("Move to a section") { onAskMove(app) })
         if (!Shortcuts.isShortcut(app) && !HubLink.isOwn(app)) add(RowAction("App info") { Apps.openInfo(context, app) })
     }
 
     Column(
         Modifier
             .fillMaxSize()
+            .then(if (page.workspace) Modifier.background(Color.Black) else Modifier)
             .nestedScroll(openOnSwipeUp)
             .pointerInput(onOpenDrawer) {
                 var pulled = 0f
@@ -121,28 +113,32 @@ fun HomeScreen(
             .systemBarsPadding()
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
-            Spacer(Modifier.weight(1f))
-            Text("Dev mode", color = Color.White.copy(alpha = if (devMode) 1f else 0.6f), fontSize = 13.sp)
-            Spacer(Modifier.width(8.dp))
-            Switch(checked = devMode, onCheckedChange = onDevMode, modifier = Modifier.scale(0.8f))
+        topBar()
+        if (page.workspace) {
+            Text(
+                page.name,
+                color = Color.White,
+                fontSize = 30.sp,
+                modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 12.dp),
+            )
         }
 
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (favApps.isNotEmpty()) {
-                item(key = "favorites") {
-                    Column(Modifier.padding(horizontal = 12.dp)) {
-                        favApps.forEach { app ->
-                            AppRow(app = app, textSize = 22.sp, iconSize = 30.dp, actions = actionsFor(app))
-                        }
-                    }
-                }
-            }
-            Sections.ALL.forEach { name ->
+            if (!page.workspace) item(key = "widgets") { widgets() }
+            page.sections.forEach { name ->
                 val inIt = grouped[name].orEmpty()
-                if (inIt.isNotEmpty()) {
+                // Home shows only sections with apps; a workspace shows all of its sections, so you can fill them.
+                if (inIt.isNotEmpty() || page.workspace) {
                     item(key = "section-$name") {
-                        SectionBox(name) {
+                        SectionBox(name, solid = page.workspace) {
+                            if (inIt.isEmpty()) {
+                                Text(
+                                    "Empty. Hold any app and move it here.",
+                                    color = Color.White.copy(alpha = 0.5f),
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.padding(start = 8.dp, bottom = 6.dp),
+                                )
+                            }
                             inIt.chunked(4).forEach { row ->
                                 Row(Modifier.fillMaxWidth()) {
                                     row.forEach { app -> AppCell(app, actionsFor(app), Modifier.weight(1f)) }
@@ -155,7 +151,7 @@ fun HomeScreen(
             }
             item(key = "hint") {
                 Text(
-                    "Hold an app to move it to another section. Swipe up for all apps.",
+                    "Hold an app to move it. Swipe sideways for your workspaces, up for all apps.",
                     color = Color.White.copy(alpha = 0.5f),
                     fontSize = 12.sp,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -163,52 +159,77 @@ fun HomeScreen(
             }
         }
     }
+}
 
-    val app = moving
-    if (app != null) {
-        val current = Sections.of(app, moved, hubProjects)
-        AlertDialog(
-            onDismissRequest = { moving = null },
-            title = { Text("Move ${app.label}") },
-            text = {
-                Column {
-                    (Sections.ALL + Sections.HIDDEN).forEach { name ->
+/** Where an app can go: every section on every page, or hidden from the pages. */
+@Composable
+fun MoveDialog(
+    app: AppEntry,
+    moved: Map<String, String>,
+    hubProjects: Set<String>,
+    onMove: (AppEntry, String?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val current = Sections.of(app, moved, hubProjects)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Move ${app.label}") },
+        text = {
+            Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
+                Sections.PAGES.forEach { page ->
+                    Text(
+                        page.name.uppercase(),
+                        color = Color.White.copy(alpha = 0.55f),
+                        fontSize = 12.sp,
+                        letterSpacing = 1.5.sp,
+                        modifier = Modifier.padding(top = 10.dp, bottom = 2.dp),
+                    )
+                    page.sections.forEach { name ->
                         Text(
                             if (name == current) "$name  (here now)" else name,
                             color = Color.White,
                             fontSize = 17.sp,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { onMove(app, name); moving = null }
-                                .padding(vertical = 10.dp),
-                        )
-                    }
-                    if (app.key in moved) {
-                        Text(
-                            "Put it back where it started",
-                            color = Color.White.copy(alpha = 0.7f),
-                            fontSize = 15.sp,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onMove(app, null); moving = null }
-                                .padding(vertical = 10.dp),
+                                .clickable { onMove(app, name); onDismiss() }
+                                .padding(vertical = 9.dp),
                         )
                     }
                 }
-            },
-            confirmButton = { TextButton(onClick = { moving = null }) { Text("Cancel") } },
-        )
-    }
+                Text(
+                    if (current == Sections.HIDDEN) "Hidden  (here now)" else "Hide it (stays in the app list)",
+                    color = Color.White.copy(alpha = 0.8f),
+                    fontSize = 16.sp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onMove(app, Sections.HIDDEN); onDismiss() }
+                        .padding(top = 14.dp, bottom = 9.dp),
+                )
+                if (app.key in moved) {
+                    Text(
+                        "Put it back where it started",
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontSize = 15.sp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onMove(app, null); onDismiss() }
+                            .padding(vertical = 9.dp),
+                    )
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
-/** One section: black, with a thin white line round it, like the wireframe. */
+/** One section: black (see-through on Home), with a thin white line round it, like the wireframe. */
 @Composable
-private fun SectionBox(name: String, content: @Composable () -> Unit) {
+private fun SectionBox(name: String, solid: Boolean, content: @Composable () -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
-            .background(Color.Black.copy(alpha = 0.82f))
+            .background(Color.Black.copy(alpha = if (solid) 1f else 0.55f))
             .border(1.dp, Color.White.copy(alpha = 0.7f), RoundedCornerShape(18.dp))
             .padding(horizontal = 8.dp, vertical = 10.dp)
     ) {

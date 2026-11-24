@@ -52,6 +52,7 @@ fun AppDrawer(
     onClose: () -> Unit,
     onAppsChanged: () -> Unit = {},
     resumes: Int = 0,
+    onAskMove: (AppEntry) -> Unit = {},
 ) {
     val context = LocalContext.current
     var query by remember { mutableStateOf("") }
@@ -124,16 +125,12 @@ fun AppDrawer(
         ) {
             LazyColumn(state = listState, modifier = Modifier.weight(1f)) {
                 items(shown, key = { it.key }) { app ->
-                    val isFav = app.key in favorites
                     AppRow(
                         app = app,
                         textSize = 18.sp,
                         iconSize = 36.dp,
                         actions = buildList {
-                            add(
-                                if (isFav) RowAction("Remove from home") { onFavoritesChange(favorites - app.key) }
-                                else RowAction("Add to home") { onFavoritesChange(favorites + app.key) }
-                            )
+                            add(RowAction("Move to a section") { onAskMove(app) })
                             when {
                                 HubLink.isOwn(app) -> {}
                                 Shortcuts.isShortcut(app) -> add(RowAction("Remove shortcut") {
