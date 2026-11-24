@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.coroutines.resume
 
 /** A game to open: the page's address, and which game it is (for landscape). */
 data class GamePage(val url: String, val game: String)
@@ -402,7 +403,30 @@ private fun Field(value: String, onChange: (String) -> Unit, hint: String, uri: 
 fun GameScreen(page: GamePage, hubUrl: String, onClose: () -> Unit) {
     HideSystemBars()
     GameWindow(sideways = page.game in SIDEWAYS)
+    // A game with no picture of its own gets one from the screen a few seconds into play.
+    val activity = LocalContext.current as? android.app.Activity
+    LaunchedEffect(page.game) {
+        if (activity == null) return@LaunchedEffect
+        delay(8_000)
+        val shot = grabScreen(activity) ?: return@LaunchedEffect
+        GameIcons.snapshot(activity, page.game, shot)
+    }
     Box(Modifier.fillMaxSize().background(Color(0xFF101014))) {
         HubWebView(url = page.url, proxyBase = hubUrl, isShown = true, onGoHome = onClose)
     }
 }
+
+/** What's on screen now, games' GPU drawing included (Android 8 and later). */
+private suspend fun grabScreen(activity: android.app.Activity): android.graphics.Bitmap? =
+    kotlinx.coroutines.suspendCancellableCoroutine { done ->
+        try {
+            val view = activity.window.decorView
+            if (view.width == 0 || view.height == 0) { done.resume(null); return@suspendCancellableCoroutine }
+            val bmp = android.graphics.Bitmap.createBitmap(view.width, view.height, android.graphics.Bitmap.Config.ARGB_8888)
+            android.view.PixelCopy.request(activity.window, bmp, { result ->
+                done.resume(if (result == android.view.PixelCopy.SUCCESS) bmp else null)
+            }, android.os.Handler(android.os.Looper.getMainLooper()))
+        } catch (e: Exception) {
+            done.resume(null)
+        }
+    }

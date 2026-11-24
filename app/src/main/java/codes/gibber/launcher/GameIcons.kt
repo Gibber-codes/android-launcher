@@ -28,6 +28,67 @@ object GameIcons {
 
     private fun file(context: Context, id: String) = File(File(context.filesDir, "game-icons"), "$id.png")
 
+    /** Where a game's picture came from: "chosen" by you, "found" on its page, or a "snapshot" of play. */
+    private fun kindFile(context: Context, id: String) = File(File(context.filesDir, "game-icons"), "$id.kind")
+
+    private fun kindOf(context: Context, id: String): String? =
+        kindFile(context, id).takeIf { it.exists() }?.readText()?.trim()?.ifBlank { null }
+            ?: if (file(context, id).exists()) "found" else null
+
+    private suspend fun save(context: Context, id: String, bmp: Bitmap, kind: String) = withContext(Dispatchers.IO) {
+        val f = file(context, id)
+        f.parentFile?.mkdirs()
+        f.outputStream().use { square(bmp).compress(Bitmap.CompressFormat.PNG, 100, it) }
+        kindFile(context, id).writeText(kind)
+        withContext(Dispatchers.Main) { version++ }
+    }
+
+    /** You picked a picture for a game; it stays until you choose another or go back to its own. */
+    suspend fun choose(context: Context, id: String, uri: android.net.Uri): Boolean {
+        val bmp = withContext(Dispatchers.IO) {
+            try {
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+                var sample = 1
+                while (minOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 256) sample *= 2
+                context.contentResolver.openInputStream(uri)?.use {
+                    BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
+                }
+            } catch (e: Exception) {
+                null
+            }
+        } ?: return false
+        save(context, id, bmp, "chosen")
+        return true
+    }
+
+    fun isChosen(context: Context, id: String) = kindOf(context, id) == "chosen"
+
+    /** Drops the picture you chose, so the game's own is looked for again. */
+    suspend fun forget(context: Context, id: String) = withContext(Dispatchers.IO) {
+        file(context, id).delete()
+        kindFile(context, id).delete()
+        lastTry.remove(id)
+        withContext(Dispatchers.Main) { version++ }
+    }
+
+    /** A picture from the game itself while you play, kept only when the game has no picture yet. */
+    suspend fun snapshot(context: Context, id: String, shot: Bitmap) {
+        if (kindOf(context, id) != null) return
+        if (looksBlank(shot)) return
+        save(context, id, shot, "snapshot")
+    }
+
+    /** A loading screen or a black frame: nearly every sampled pixel the same. */
+    private fun looksBlank(b: Bitmap): Boolean {
+        val seen = mutableSetOf<Int>()
+        for (x in 1..8) for (y in 1..8) {
+            val p = b.getPixel(b.width * x / 9, b.height * y / 9)
+            seen += (p shr 20 and 0xF shl 8) or (p shr 12 and 0xF shl 4) or (p shr 4 and 0xF)
+        }
+        return seen.size < 4
+    }
+
     fun cached(context: Context, id: String, size: Int): Bitmap? {
         val f = file(context, id)
         if (!f.exists()) return null
@@ -58,7 +119,9 @@ object GameIcons {
         places.forEach { (id, bases) ->
             val f = file(context, id)
             val now = System.currentTimeMillis()
-            if (f.exists() && now - f.lastModified() < 6 * 3_600_000L) return@forEach
+            val kind = kindOf(context, id)
+            if (kind == "chosen") return@forEach
+            if (kind == "found" && now - f.lastModified() < 6 * 3_600_000L) return@forEach
             val last = lastTry[id]
             if (last != null && last.second == bases && now - last.first < 10 * 60_000L) return@forEach
             lastTry[id] = now to bases
@@ -66,6 +129,7 @@ object GameIcons {
                 val bmp = try { findIcon(base) } catch (e: Exception) { null } ?: continue
                 f.parentFile?.mkdirs()
                 f.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                kindFile(context, id).writeText("found")
                 found = true
                 break
             }

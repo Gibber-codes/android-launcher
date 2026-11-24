@@ -126,7 +126,33 @@ fun PageScreen(
         }
     }
 
+    // Choosing a game's picture from your photos.
+    var pictureFor by remember { mutableStateOf<String?>(null) }
+    val picker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        val id = pictureFor
+        pictureFor = null
+        if (uri != null && id != null) scope.launch {
+            if (!GameIcons.choose(context, id, uri)) {
+                android.widget.Toast.makeText(context, "Couldn't open that picture.", android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
     fun actionsFor(app: AppEntry): List<RowAction> = buildList {
+        if (HubGames.isGame(app)) {
+            val id = HubGames.idOf(app)
+            add(RowAction("Choose picture") {
+                pictureFor = id
+                picker.launch(
+                    androidx.activity.result.PickVisualMediaRequest(
+                        androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly
+                    )
+                )
+            })
+            if (GameIcons.isChosen(context, id)) add(RowAction("Use the game's own picture") { scope.launch { GameIcons.forget(context, id) } })
+        }
         add(RowAction("Remove from this card") { onRemove(app) })
         add(RowAction("Merge with another app") { mergeFor = app })
         add(RowAction("Move to a section") { onAskMove(app) })
