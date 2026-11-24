@@ -69,6 +69,7 @@ fun LauncherApp(
         var pickingWidget by remember { mutableStateOf(false) }
         var removingWidget by remember { mutableStateOf(false) }
         var wallMenu by remember { mutableStateOf(false) }
+        var groups by remember { mutableStateOf(prefs.groups) }
 
         fun saveHubUrl(raw: String) {
             prefs.hubUrl = normalizeHubUrl(raw)
@@ -132,6 +133,8 @@ fun LauncherApp(
                         prefs.sections = moved
                     },
                     onLongPressWallpaper = if (i == 0) ({ wallMenu = true }) else null,
+                    groups = groups,
+                    onGroupsChange = { groups = it; prefs.groups = it },
                     widgets = {
                         WidgetArea(
                             ids = widgetIds,

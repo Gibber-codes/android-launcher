@@ -40,11 +40,11 @@ fun AppIcon(app: AppEntry, size: Dp) {
     val context = LocalContext.current
     val px = with(LocalDensity.current) { size.roundToPx() }
     val cacheKey = "${app.key}@$px"
+    // Keyed on the app: when a spot is reused for another app (after one is removed),
+    // it must show that app's icon, never the old one's.
     val bitmap by produceState<Bitmap?>(initialValue = iconCache.get(cacheKey), cacheKey) {
-        if (value == null) {
-            value = withContext(Dispatchers.IO) {
-                Apps.loadIcon(context, app, px)?.also { iconCache.put(cacheKey, it) }
-            }
+        value = iconCache.get(cacheKey) ?: withContext(Dispatchers.IO) {
+            Apps.loadIcon(context, app, px)?.also { iconCache.put(cacheKey, it) }
         }
     }
     val bmp = bitmap

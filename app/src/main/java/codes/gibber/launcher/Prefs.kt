@@ -53,6 +53,14 @@ class Prefs(context: Context) {
         get() = lines(KEY_SECTIONS).mapNotNull { l -> l.split('\t').takeIf { it.size >= 2 }?.let { it[0] to it[1] } }.toMap()
         set(value) = putLines(KEY_SECTIONS, value.map { "${it.key}\t${it.value}" })
 
+    /** Apps you merged into one icon. */
+    var groups: List<AppGroup>
+        get() = lines("groups").mapNotNull { l ->
+            val p = l.split('\t')
+            if (p.size < 3) null else AppGroup(p[0], p[1], p[2].split('|').filter { it.isNotBlank() })
+        }
+        set(value) = putLines("groups", value.map { "${it.id}\t${it.name.replace('\t', ' ')}\t${it.keys.joinToString("|")}" })
+
     /** The widgets on the home screen, top to bottom. */
     var widgets: List<Int>
         get() = lines("widgets").mapNotNull { it.toIntOrNull() }
