@@ -18,29 +18,33 @@ import java.net.URL
  * launcher's own Update button, which reads the repo's latest (non-pre) release.
  */
 object Updater {
-    private const val RELEASES = "https://api.github.com/repos/Gibber-codes/android-launcher/releases?per_page=40"
+    private const val RELEASES = "https://api.github.com/repos/Gibber-codes/android-launcher/releases?per_page=100&page="
 
     data class Release(val build: Int, val apkUrl: String)
 
+    /** The newest phone build. Launcher builds share the list, so it looks through a few pages. */
     suspend fun latest(): Release? = withContext(Dispatchers.IO) {
         try {
-            val conn = URL(RELEASES).openConnection() as HttpURLConnection
-            conn.setRequestProperty("Accept", "application/vnd.github+json")
-            conn.connectTimeout = 10_000
-            conn.readTimeout = 15_000
-            if (conn.responseCode != 200) return@withContext null
-            val list = JSONArray(conn.inputStream.bufferedReader().use { it.readText() })
             var best: Release? = null
-            for (i in 0 until list.length()) {
-                val r = list.getJSONObject(i)
-                val build = r.getString("tag_name").takeIf { it.startsWith("phone-") }?.removePrefix("phone-")?.toIntOrNull() ?: continue
-                val assets = r.getJSONArray("assets")
-                for (j in 0 until assets.length()) {
-                    val a = assets.getJSONObject(j)
-                    if (a.getString("name") == "gibber-phone.apk" && (best == null || build > best.build)) {
-                        best = Release(build, a.getString("browser_download_url"))
+            for (page in 1..3) {
+                val conn = URL(RELEASES + page).openConnection() as HttpURLConnection
+                conn.setRequestProperty("Accept", "application/vnd.github+json")
+                conn.connectTimeout = 10_000
+                conn.readTimeout = 15_000
+                if (conn.responseCode != 200) break
+                val list = JSONArray(conn.inputStream.bufferedReader().use { it.readText() })
+                for (i in 0 until list.length()) {
+                    val r = list.getJSONObject(i)
+                    val build = r.getString("tag_name").takeIf { it.startsWith("phone-") }?.removePrefix("phone-")?.toIntOrNull() ?: continue
+                    val assets = r.getJSONArray("assets")
+                    for (j in 0 until assets.length()) {
+                        val a = assets.getJSONObject(j)
+                        if (a.getString("name") == "gibber-phone.apk" && (best == null || build > best.build)) {
+                            best = Release(build, a.getString("browser_download_url"))
+                        }
                     }
                 }
+                if (list.length() < 100) break
             }
             best
         } catch (_: Exception) {
