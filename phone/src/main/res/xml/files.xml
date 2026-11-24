@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- New app versions the Update button downloads. -->
+    <cache-path name="updates" path="updates/" />
+    <!-- Picture and group texts going out and coming in, handed to Android's MMS service. -->
+    <cache-path name="mms" path="mms/" />
+</paths>

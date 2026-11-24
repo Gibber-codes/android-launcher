@@ -3,6 +3,10 @@ name: Build APK
 on:
   push:
     branches: [main]
+    # Gibber Phone has its own workflow (build-phone.yml).
+    paths-ignore:
+      - "phone/**"
+      - ".github/workflows/build-phone.yml"
   workflow_dispatch:
 
 permissions:
@@ -50,7 +54,7 @@ jobs:
         run: |
           if [ -z "$LAUNCHER_KEYSTORE" ]; then unset LAUNCHER_KEYSTORE; fi
           chmod +x gradlew
-          ./gradlew assembleRelease
+          ./gradlew :app:assembleRelease
           cp app/build/outputs/apk/release/app-release.apk gibber-launcher.apk
 
       - uses: actions/upload-artifact@v4
