@@ -64,6 +64,7 @@ fun PageScreen(
     onRemove: (AppEntry) -> Unit = {},
     onLongPressWallpaper: (() -> Unit)? = null,
     groups: List<AppGroup> = emptyList(),
+    titleAction: (@Composable () -> Unit)? = null,
     onGroupsChange: (List<AppGroup>) -> Unit = {},
     widgets: @Composable () -> Unit = {},
 ) {
@@ -164,12 +165,15 @@ fun PageScreen(
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
         if (page.workspace) {
-            Text(
-                page.name,
-                color = Color.White,
-                fontSize = 30.sp,
-                modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 12.dp),
-            )
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    page.name,
+                    color = Color.White,
+                    fontSize = 30.sp,
+                    modifier = Modifier.weight(1f).padding(start = 8.dp, top = 8.dp, bottom = 12.dp),
+                )
+                titleAction?.invoke()
+            }
         }
 
         // On Home the cards keep to a slim column on the left, so the wallpaper shows on the right.

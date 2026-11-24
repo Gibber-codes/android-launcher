@@ -52,7 +52,6 @@ object Apps {
             .distinctBy { it.key }
             .toList()
             .plus(Shortcuts.load(context))
-            .plus(HubLink.settingsEntry(context))
             .plus(HubGames.entries(context))
             .sortedBy { it.label.lowercase() }
     }

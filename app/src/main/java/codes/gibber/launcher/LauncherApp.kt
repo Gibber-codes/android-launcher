@@ -149,6 +149,18 @@ fun LauncherApp(
                     },
                     onLongPressWallpaper = if (i == 0) ({ wallMenu = true }) else null,
                     groups = groups,
+                    // Gibber Settings sits as a small button at the top right of the Dev page.
+                    titleAction = if (page.name == "Dev") ({
+                        Text(
+                            "⚙",
+                            color = Color.White.copy(alpha = 0.85f),
+                            fontSize = 24.sp,
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .clickable { settingsOpen = true }
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                        )
+                    }) else null,
                     onGroupsChange = { groups = it; prefs.groups = it },
                     widgets = {
                         WidgetArea(
