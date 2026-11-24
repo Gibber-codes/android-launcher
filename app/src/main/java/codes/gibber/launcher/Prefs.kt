@@ -76,6 +76,15 @@ class Prefs(context: Context) {
     fun setVersions(game: String, list: List<Pair<String, String>>) =
         putLines("game_versions_$game", list.map { "${it.first}\t${it.second}" })
 
+    /** The build the update notification was last posted for, so each build is announced once. */
+    var notifiedBuild: Int
+        get() = sp.getInt("notified_build", 0)
+        set(value) = sp.edit().putInt("notified_build", value).apply()
+
+    var askedNotifications: Boolean
+        get() = sp.getBoolean("asked_notifications", false)
+        set(value) = sp.edit().putBoolean("asked_notifications", value).apply()
+
     private fun lines(key: String) = sp.getString(key, "")!!.split("\n").filter { it.isNotBlank() }
     private fun putLines(key: String, list: List<String>) = sp.edit().putString(key, list.joinToString("\n")).apply()
 

@@ -47,31 +47,7 @@ fun UpdateButton(resumes: Int, modifier: Modifier = Modifier) {
         modifier = modifier
             .clickable(enabled = busy == null) {
                 scope.launch {
-                    busy = "Checking…"
-                    val release = Updater.latest()
-                    if (release == null) {
-                        busy = null
-                        say("Couldn't reach GitHub to check for an update.")
-                        return@launch
-                    }
-                    if (!Updater.isNewer(release)) {
-                        busy = null
-                        ready = false
-                        say("You're on the newest version (build ${BuildConfig.VERSION_CODE}).")
-                        return@launch
-                    }
-                    ready = true
-                    if (!Updater.canInstall(context)) {
-                        busy = null
-                        say("Turn on Allow for Gibber Launcher, come back, and tap Update again.")
-                        Updater.openInstallPermission(context)
-                        return@launch
-                    }
-                    busy = "Downloading…"
-                    val apk = Updater.download(context, release)
-                    busy = null
-                    if (apk == null) say("The download didn't finish. Tap Update to try again.")
-                    else Updater.openInstaller(context, apk)
+                    Updater.install(context, busy = { busy = it }, say = ::say)
                 }
             }
             .padding(vertical = 12.dp),

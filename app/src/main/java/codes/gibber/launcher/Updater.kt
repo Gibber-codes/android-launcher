@@ -81,6 +81,32 @@ object Updater {
         context.startActivity(intent)
     }
 
+    /**
+     * The whole update from one tap: checks, asks for the install permission when needed, downloads
+     * and opens Android's installer. `busy` shows the step under way (null when done); `say` tells the result.
+     */
+    suspend fun install(context: Context, busy: (String?) -> Unit, say: (String) -> Unit) {
+        busy("Checking…")
+        val release = latest()
+        if (release == null) {
+            busy(null); say("Couldn't reach GitHub to check for an update."); return
+        }
+        if (!isNewer(release)) {
+            busy(null); say("You're on the newest version (build ${BuildConfig.VERSION_CODE})."); return
+        }
+        if (!canInstall(context)) {
+            busy(null)
+            say("Turn on Allow for Gibber Launcher, come back, and tap Update again.")
+            openInstallPermission(context)
+            return
+        }
+        busy("Downloading…")
+        val apk = download(context, release)
+        busy(null)
+        if (apk == null) say("The download didn't finish. Tap Update to try again.")
+        else openInstaller(context, apk)
+    }
+
     fun openInstaller(context: Context, apk: File) {
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.updates", apk)
         val intent = Intent(Intent.ACTION_VIEW)
