@@ -59,7 +59,7 @@ object Apps {
 
     fun loadIcon(context: Context, app: AppEntry, sizePx: Int): Bitmap? =
         when {
-            HubGames.isGame(app) -> HubGames.tile(app, sizePx)
+            HubGames.isGame(app) -> GameIcons.cached(context, HubGames.idOf(app), sizePx) ?: HubGames.tile(app, sizePx)
             HubLink.isOwn(app) -> try {
                 context.packageManager.getApplicationIcon(context.packageName).toBitmap(sizePx)
             } catch (e: Exception) {

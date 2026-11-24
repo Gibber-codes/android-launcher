@@ -13,7 +13,7 @@ object Sections {
         // Home keeps to three sections; every other app waits in the swipe-up list
         // (Social, Play, Maps, Work, Tools and Other are guesses that don't show on a page).
         LauncherPage("Home", listOf("Contact", "Money", "Media"), workspace = false),
-        LauncherPage("Dev", listOf("My games", "Code", "AI"), workspace = true),
+        LauncherPage("Dev", listOf("My games", "Code", "AI", "Dev tools"), workspace = true),
         LauncherPage("Mechanic", listOf("Jobs", "Parts", "Mechanic tools"), workspace = true),
     )
 
@@ -44,6 +44,10 @@ object Sections {
         ),
         "Code" to listOf("com.github.android", "com.termux", "com.netlify.app", "com.vercel.app"),
         "AI" to listOf("com.anthropic.claude", "com.openai.chatgpt", "com.google.android.apps.bard"),
+        "Dev tools" to listOf(
+            "com.android.settings", "com.sec.android.app.myfiles", "com.google.android.apps.nbu.files",
+            "com.google.android.documentsui",
+        ),
         "Work" to listOf(
             "com.google.android.calendar", "com.samsung.android.calendar", "com.Slack", "com.slack",
             "com.google.android.apps.docs", "com.google.android.apps.docs.editors.docs",
@@ -69,9 +73,8 @@ object Sections {
             "com.bluedriver", "com.lemurmonitors.bluedriver", "com.autel.maxiap200", "com.youcanic",
         ),
         "Tools" to listOf(
-            "com.android.chrome", "com.sec.android.app.sbrowser", "com.android.vending", "com.android.settings",
-            "com.sec.android.app.clockpackage", "com.sec.android.app.popupcalculator", "com.sec.android.app.myfiles",
-            "com.google.android.apps.nbu.files", "com.samsung.android.app.notes", "com.google.android.keep",
+            "com.android.chrome", "com.sec.android.app.sbrowser", "com.android.vending",
+            "com.sec.android.app.clockpackage", "com.sec.android.app.popupcalculator", "com.samsung.android.app.notes", "com.google.android.keep",
             "com.google.android.calculator", "com.google.android.deskclock", "com.samsung.android.voicerecorder",
             "com.google.android.googlequicksearchbox", "com.samsung.android.app.goodlock",
         ),
@@ -81,7 +84,10 @@ object Sections {
     fun of(app: AppEntry, moved: Map<String, String>, hubProjects: Set<String>): String {
         moved[app.key]?.let { m -> return RENAMED[m] ?: m }
         if (HubGames.isGame(app)) return if (HubGames.idOf(app) in hubProjects) "Code" else "My games"
+        if (HubLink.isSettings(app)) return "Dev tools"
         if (HubLink.isOwn(app)) return "Code"
+        // Claude Duet and other Claude apps, by name, since their package names vary.
+        if (app.label.contains("Claude", ignoreCase = true) || app.label.contains("Gemini", ignoreCase = true)) return "AI"
         if (Shortcuts.isShortcut(app)) return "Other"
         KNOWN[app.packageName]?.let { return it }
         if (app.isGame) return "Play"

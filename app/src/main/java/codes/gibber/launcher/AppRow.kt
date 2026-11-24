@@ -39,7 +39,8 @@ private val iconCache = LruCache<String, Bitmap>(300)
 fun AppIcon(app: AppEntry, size: Dp) {
     val context = LocalContext.current
     val px = with(LocalDensity.current) { size.roundToPx() }
-    val cacheKey = "${app.key}@$px"
+    // A game's picture can arrive later, so its version is part of the key.
+    val cacheKey = if (HubGames.isGame(app)) "${app.key}@$px#${GameIcons.version}" else "${app.key}@$px"
     // Keyed on the app: when a spot is reused for another app (after one is removed),
     // it must show that app's icon, never the old one's.
     val bitmap by produceState<Bitmap?>(initialValue = iconCache.get(cacheKey), cacheKey) {

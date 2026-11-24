@@ -22,6 +22,8 @@ data class HubWorkspace(
     val nav: List<HubNav>,
     /** The hub's own grouping, like games, or blank. */
     val group: String = "",
+    /** The game's live site (its Netlify address), when the hub knows it. */
+    val live: String? = null,
 )
 
 data class HubLimit(val used: Int, val resets: String)
@@ -102,6 +104,7 @@ class HubApi(hubUrl: String) {
                 state = w.optString("state", "down"),
                 nav = nav,
                 group = w.optString("group"),
+                live = w.optString("live").takeIf { it.startsWith("https://") },
             )
         }
     }

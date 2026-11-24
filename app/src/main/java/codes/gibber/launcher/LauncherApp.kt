@@ -58,6 +58,7 @@ fun LauncherApp(
             prefs.favorites = list
         }
 
+        val context = androidx.compose.ui.platform.LocalContext.current
         var hubUrl by remember { mutableStateOf(normalizeHubUrl(prefs.hubUrl)) }
         var settingsOpen by remember { mutableStateOf(false) }
         var moved by remember { mutableStateOf(prefs.sections) }
@@ -89,8 +90,22 @@ fun LauncherApp(
 
         // Keep the hub's games up to date, whenever you come back to the launcher.
         LaunchedEffect(resumes, hubUrl) {
-            if (hubUrl.isBlank()) return@LaunchedEffect
-            val found = HubApi(hubUrl).workspaces() ?: return@LaunchedEffect
+            val found = if (hubUrl.isBlank()) null else HubApi(hubUrl).workspaces()
+            // Fetch each game's own picture: from its live site, else from its dev server on the PC.
+            val pc = android.net.Uri.parse(hubUrl).host
+            val ports = found.orEmpty().associate { it.id to it.port }
+            // When the hub knows a game's live site, use it, unless you set one yourself.
+            found.orEmpty().forEach { w -> if (w.live != null && prefs.liveUrl(w.id).isBlank()) prefs.setLiveUrl(w.id, w.live) }
+            GameIcons.refresh(
+                context,
+                (prefs.hubGames.map { it.first } + ports.keys).distinct().associateWith { id ->
+                    listOfNotNull(
+                        prefs.liveUrl(id).ifBlank { null },
+                        if (pc != null && ports[id] != null) "http://$pc:${ports[id]}/" else null,
+                    )
+                },
+            )
+            if (found == null) return@LaunchedEffect
             val games = found.map { it.id to it.name }
             val projects = found.filter { it.group.isNotBlank() && !it.group.contains("game", ignoreCase = true) }
                 .map { it.id }.toSet()
