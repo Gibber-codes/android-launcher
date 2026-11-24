@@ -99,6 +99,7 @@ object History {
     /** The conversation with exactly these people, if there is one yet. */
     fun findThread(context: Context, addresses: List<String>): Long? {
         val keys = addresses.map { Numbers.key(it) }.toSet()
-        return Texts.conversations(context).firstOrNull { c -> c.addresses.map { Numbers.key(it) }.toSet() == keys }?.id
+        Texts.conversations(context).firstOrNull { c -> c.addresses.map { Numbers.key(it) }.toSet() == keys }?.id?.let { return it }
+        return if (addresses.size == 1) Texts.threadWith(context, addresses[0]) else null
     }
 }

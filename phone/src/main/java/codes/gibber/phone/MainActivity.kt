@@ -56,8 +56,22 @@ class MainActivity : ComponentActivity() {
     /** Bumps when you come back to the app or answer a permission question, so screens reload. */
     val resumes = mutableIntStateOf(0)
 
+    private var askedAt = 0L
     private val askPermissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         resumes.intValue++
+        // When Android answers at once without showing anything, it has blocked the ask (a "restricted" permission,
+        // or "don't ask again"). Open the app's own settings page so it can be allowed there.
+        if (missingPermissions().isNotEmpty() && System.currentTimeMillis() - askedAt < 600) openAppInfo()
+    }
+
+    fun openAppInfo() {
+        try {
+            startActivity(
+                Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        } catch (_: Exception) {
+        }
     }
     private val askRole = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         resumes.intValue++
@@ -171,7 +185,13 @@ class MainActivity : ComponentActivity() {
         ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
     }
 
-    fun askForPermissions() = askPermissions.launch(missingPermissions().toTypedArray())
+    fun askForPermissions() {
+        askedAt = System.currentTimeMillis()
+        askPermissions.launch(missingPermissions().toTypedArray())
+    }
+
+    fun canReadTexts(): Boolean =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
 
     fun isDefaultCalls(): Boolean = getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_DIALER)
 

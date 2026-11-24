@@ -51,20 +51,74 @@ object Texts {
         }
         val unread = unreadThreads(context)
         val out = ArrayList<Conversation>()
+        // Some phones' conversation lists lack a column or two, so ask again with less when the first ask fails.
+        val asks = listOf(
+            arrayOf("_id", "date", "recipient_ids", "snippet", "message_count"),
+            arrayOf("_id", "date", "recipient_ids", "snippet"),
+        )
+        for (projection in asks) {
+            try {
+                cr.query(CONVERSATIONS, projection, null, null, "date DESC")?.use { c ->
+                    while (c.moveToNext()) {
+                        if (projection.size > 4 && !c.isNull(4) && c.getInt(4) == 0) continue
+                        val id = c.getLong(0)
+                        val addresses = (c.getString(2) ?: "").split(' ').filter { it.isNotBlank() }
+                            .mapNotNull { addressById[it] }.filter { it.isNotBlank() }
+                        if (addresses.isEmpty()) continue
+                        out.add(Conversation(id, addresses, c.getString(3) ?: "", c.getLong(1), id in unread))
+                    }
+                }
+                break
+            } catch (_: Exception) {
+                out.clear()
+            }
+        }
+        if (out.isEmpty()) out.addAll(fromTexts(context, unread))
+        return out
+    }
+
+    /** The conversation list built from the texts themselves, for phones whose list can't be read. */
+    private fun fromTexts(context: Context, unread: Set<Long>): List<Conversation> {
+        val seen = LinkedHashMap<Long, Conversation>()
         try {
-            cr.query(CONVERSATIONS, arrayOf("_id", "date", "recipient_ids", "snippet", "message_count"), null, null, "date DESC")?.use { c ->
+            context.contentResolver.query(
+                Telephony.Sms.CONTENT_URI,
+                arrayOf(Telephony.Sms.THREAD_ID, Telephony.Sms.ADDRESS, Telephony.Sms.BODY, Telephony.Sms.DATE),
+                null, null, "date DESC",
+            )?.use { c ->
                 while (c.moveToNext()) {
-                    if (c.getInt(4) == 0) continue
                     val id = c.getLong(0)
-                    val addresses = (c.getString(2) ?: "").split(' ').filter { it.isNotBlank() }
-                        .mapNotNull { addressById[it] }.filter { it.isNotBlank() }
-                    if (addresses.isEmpty()) continue
-                    out.add(Conversation(id, addresses, c.getString(3) ?: "", c.getLong(1), id in unread))
+                    if (id in seen) continue
+                    val address = c.getString(1)?.takeIf { it.isNotBlank() } ?: continue
+                    seen[id] = Conversation(id, listOf(address), c.getString(2) ?: "", c.getLong(3), id in unread)
                 }
             }
         } catch (_: Exception) {
         }
-        return out
+        return seen.values.toList()
+    }
+
+    /**
+     * The one-to-one conversation with this number, found by searching the texts themselves. This works even when
+     * the conversation list writes the number differently, like "+1 480..." against "(480) ...".
+     */
+    fun threadWith(context: Context, address: String): Long? {
+        val key = Numbers.key(address)
+        val digits = key.filter { it.isDigit() }
+        if (digits.length < 4) return null
+        val counts = HashMap<Long, Int>()
+        try {
+            context.contentResolver.query(
+                Telephony.Sms.CONTENT_URI, arrayOf(Telephony.Sms.THREAD_ID, Telephony.Sms.ADDRESS),
+                "${Telephony.Sms.ADDRESS} LIKE ?", arrayOf("%" + digits.takeLast(4)), null,
+            )?.use { c ->
+                while (c.moveToNext()) {
+                    if (Numbers.key(c.getString(1)) == key) counts[c.getLong(0)] = (counts[c.getLong(0)] ?: 0) + 1
+                }
+            }
+        } catch (_: Exception) {
+        }
+        return counts.maxByOrNull { it.value }?.key
     }
 
     private fun unreadThreads(context: Context): Set<Long> {

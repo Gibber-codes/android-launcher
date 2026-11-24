@@ -266,6 +266,17 @@ fun PersonScreen(main: MainActivity, screen: Screen.Person, resumes: Int) {
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
+            if (!main.canReadTexts()) {
+                item {
+                    Column(
+                        Modifier.padding(vertical = 6.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Ink.Card).padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Text("Texts are hidden because Gibber Phone isn't allowed to read them yet.", color = Ink.Text, fontSize = 14.sp)
+                        Pill("Allow texts") { main.askForPermissions() }
+                    }
+                }
+            }
             if (history != null && list.isEmpty()) {
                 item { Text(if (group) "Say hi to the group." else "No texts or calls yet.", color = Ink.Muted, fontSize = 15.sp, modifier = Modifier.padding(12.dp)) }
             }
