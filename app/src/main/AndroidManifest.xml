@@ -54,6 +54,11 @@
             </intent-filter>
         </activity>
 
+        <!-- Hears how a quiet update went. -->
+        <receiver
+            android:name=".InstallResult"
+            android:exported="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.updates"
