@@ -2,6 +2,11 @@ package codes.gibber.launcher
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
@@ -76,7 +81,7 @@ object Groups {
     }
 }
 
-/** A group's icon: up to four of its apps' icons in a small tile, with its name under it. */
+/** A group, like Music: the design's folder, a count of its apps, and its name. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun GroupCell(
@@ -88,49 +93,50 @@ fun GroupCell(
     actions: List<RowAction>,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
-    val tile = if (slim) 40.dp else 44.dp
+    val press = Modifier
+        .clip(RoundedCornerShape(12.dp))
+        .combinedClickable(onClick = onOpen, onLongClick = { onHold(); menuOpen = true })
+    val shadow = androidx.compose.ui.text.TextStyle(
+        shadow = androidx.compose.ui.graphics.Shadow(
+            color = Color.Black.copy(alpha = 0.6f),
+            offset = androidx.compose.ui.geometry.Offset(0f, 1f),
+            blurRadius = 4f,
+        ),
+    )
     Box(modifier) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .combinedClickable(onClick = onOpen, onLongClick = { onHold(); menuOpen = true })
-                .padding(vertical = 8.dp, horizontal = 2.dp),
-        ) {
-            Box(
-                Modifier
-                    .size(tile)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color.White.copy(alpha = 0.22f))
-                    .padding(3.dp)
+        if (slim) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp).then(press),
             ) {
-                Column {
-                    cell.apps.take(4).chunked(2).forEach { row ->
-                        Row {
-                            row.forEach { app ->
-                                Box(Modifier.padding(1.dp)) { androidx.compose.runtime.key(app.key) { AppIcon(app, (tile - 10.dp) / 2) } }
-                            }
-                        }
-                    }
-                }
+                FolderWithCount(cell.apps.size, 26.dp)
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    cell.group.name,
+                    color = Look.Cream,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    style = shadow,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
-            Spacer(Modifier.height(4.dp))
-            Text(
-                cell.group.name,
-                color = Color.White,
-                fontSize = if (slim) 10.sp else 11.sp,
-                style = androidx.compose.ui.text.TextStyle(
-                    shadow = androidx.compose.ui.graphics.Shadow(
-                        color = Color.Black.copy(alpha = 0.9f),
-                        offset = androidx.compose.ui.geometry.Offset(0f, 2f),
-                        blurRadius = 6f,
-                    ),
-                ),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-            )
+        } else {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth().then(press).padding(vertical = 6.dp),
+            ) {
+                Box(Modifier.heightIn(min = 32.dp), contentAlignment = Alignment.Center) { FolderWithCount(cell.apps.size, 30.dp) }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    cell.group.name,
+                    color = Look.Cream,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                )
+            }
         }
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
             actions.forEach { action ->
@@ -140,57 +146,81 @@ fun GroupCell(
     }
 }
 
-/** An open group: tap an app to open it, hold one to take it out. */
+@Composable
+private fun FolderWithCount(count: Int, size: androidx.compose.ui.unit.Dp) {
+    Box {
+        FolderGlyph(size)
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .offset(x = 7.dp, y = (-6).dp)
+                .size(15.dp)
+                .clip(androidx.compose.foundation.shape.CircleShape)
+                .background(Look.Lilac),
+        ) {
+            Text("$count", color = Look.Page, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+/** An open group: a small card over the page. Tap an app to open it, hold one to take it out. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun GroupDialog(cell: Cell.Many, onTakeOut: (AppEntry) -> Unit, onDismiss: () -> Unit) {
     val context = LocalContext.current
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(cell.group.name) },
-        text = {
-            Column {
-                cell.apps.chunked(3).forEach { row ->
-                    Row(Modifier.fillMaxWidth()) {
-                        row.forEach { app ->
-                            var menuOpen by remember(app.key) { mutableStateOf(false) }
-                            Box(Modifier.weight(1f)) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .combinedClickable(
-                                            onClick = { onDismiss(); Apps.launch(context, app) },
-                                            onLongClick = { menuOpen = true },
-                                        )
-                                        .padding(vertical = 8.dp),
-                                ) {
-                                    androidx.compose.runtime.key(app.key) { AppIcon(app, 48.dp) }
-                                    Spacer(Modifier.height(4.dp))
-                                    Text(app.label, color = Color.White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                }
-                                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                                    DropdownMenuItem(
-                                        text = { Text("Take out of group") },
-                                        onClick = { menuOpen = false; onTakeOut(app) },
-                                    )
-                                }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier
+                .width(230.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(Look.Folder)
+                .border(1.dp, Look.Line, RoundedCornerShape(16.dp))
+                .padding(14.dp),
+        ) {
+            Text(
+                cell.group.name.uppercase(),
+                color = Look.Sage,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = 1.sp,
+            )
+            cell.apps.chunked(2).forEach { row ->
+                Row(Modifier.fillMaxWidth()) {
+                    row.forEach { app ->
+                        var menuOpen by remember(app.key) { mutableStateOf(false) }
+                        Box(Modifier.weight(1f)) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 64.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .combinedClickable(
+                                        onClick = { onDismiss(); Apps.launch(context, app) },
+                                        onLongClick = { menuOpen = true },
+                                    ),
+                            ) {
+                                androidx.compose.runtime.key(app.key) { AppIcon(app, 28.dp, mono = true) }
+                                Spacer(Modifier.height(6.dp))
+                                Text(app.label, color = Look.Cream, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("Take out of group") },
+                                    onClick = { menuOpen = false; onTakeOut(app) },
+                                )
                             }
                         }
-                        repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
                     }
+                    repeat(2 - row.size) { Spacer(Modifier.weight(1f)) }
                 }
-                Text(
-                    "Hold an app to take it out.",
-                    color = Color.White.copy(alpha = 0.5f),
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
             }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
-    )
+            Text("Hold an app to take it out, tap outside to close", color = Look.Muted, fontSize = 11.sp)
+        }
+    }
 }
 
 /** Pick what to merge an app with: another app on this page, or a group already there. */

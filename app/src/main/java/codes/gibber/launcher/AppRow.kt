@@ -36,16 +36,18 @@ import kotlinx.coroutines.withContext
 private val iconCache = LruCache<String, Bitmap>(300)
 
 @Composable
-fun AppIcon(app: AppEntry, size: Dp) {
+fun AppIcon(app: AppEntry, size: Dp, mono: Boolean = false) {
     val context = LocalContext.current
     val px = with(LocalDensity.current) { size.roundToPx() }
     // A game's picture can arrive later, so its version is part of the key.
-    val cacheKey = if (HubGames.isGame(app)) "${app.key}@$px#${GameIcons.version}" else "${app.key}@$px"
+    val useMono = mono && !HubGames.isGame(app)
+    val cacheKey = if (HubGames.isGame(app)) "${app.key}@$px#${GameIcons.version}" else "${app.key}@$px${if (useMono) "~mono" else ""}"
     // Keyed on the app: when a spot is reused for another app (after one is removed),
     // it must show that app's icon, never the old one's.
     val bitmap by produceState<Bitmap?>(initialValue = iconCache.get(cacheKey), cacheKey) {
         value = iconCache.get(cacheKey) ?: withContext(Dispatchers.IO) {
-            Apps.loadIcon(context, app, px)?.also { iconCache.put(cacheKey, it) }
+            ((if (useMono) Look.monoIcon(context, app, px) else null) ?: Apps.loadIcon(context, app, px))
+                ?.also { iconCache.put(cacheKey, it) }
         }
     }
     val bmp = bitmap

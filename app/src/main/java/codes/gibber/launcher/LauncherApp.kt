@@ -178,17 +178,7 @@ fun LauncherApp(
                     onLongPressWallpaper = if (i == 0) ({ wallMenu = true }) else null,
                     groups = groups,
                     // Gibber Settings sits as a small button at the top right of the Dev page.
-                    titleAction = if (page.name == "Dev") ({
-                        Text(
-                            "⚙",
-                            color = Color.White.copy(alpha = 0.85f),
-                            fontSize = 24.sp,
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .clickable { settingsOpen = true }
-                                .padding(horizontal = 12.dp, vertical = 6.dp),
-                        )
-                    }) else null,
+                    titleAction = if (page.name == "Dev") ({ GearButton { settingsOpen = true } }) else null,
                     onGroupsChange = { groups = it; prefs.groups = it },
                     widgets = {
                         WidgetArea(
@@ -209,14 +199,16 @@ fun LauncherApp(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
-                    .padding(bottom = 6.dp),
+                    .padding(bottom = 18.dp),
             ) {
+                // The design's dots: the page you're on is a short bar.
                 pages.indices.forEach { i ->
+                    val here = i == pager.currentPage
                     Box(
                         Modifier
-                            .size(if (i == pager.currentPage) 8.dp else 6.dp)
+                            .size(width = if (here) 18.dp else 6.dp, height = 6.dp)
                             .clip(CircleShape)
-                            .background(Color.White.copy(alpha = if (i == pager.currentPage) 0.95f else 0.45f))
+                            .background(if (here) Look.Cream else Look.Dim)
                             .clickable { scope.launch { pager.animateScrollToPage(i) } }
                     )
                 }

@@ -52,6 +52,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
 
 @Composable
 fun PageScreen(
@@ -136,7 +137,7 @@ fun PageScreen(
     Column(
         Modifier
             .fillMaxSize()
-            .then(if (page.workspace) Modifier.background(Color.Black) else Modifier)
+            .then(if (page.workspace) Modifier.background(Look.Page) else Modifier)
             .nestedScroll(openOnSwipeUp)
             .pointerInput(onOpenDrawer) {
                 var pulled = 0f
@@ -163,26 +164,31 @@ fun PageScreen(
                 }
             )
             .systemBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(start = 22.dp, end = 22.dp, top = if (page.workspace) 8.dp else 20.dp)
     ) {
         if (page.workspace) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp).padding(bottom = 4.dp),
+            ) {
                 Text(
                     page.name,
-                    color = Color.White,
-                    fontSize = 30.sp,
-                    modifier = Modifier.weight(1f).padding(start = 8.dp, top = 8.dp, bottom = 12.dp),
+                    color = Look.Cream,
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
                 )
                 titleAction?.invoke()
             }
+            Spacer(Modifier.height(22.dp))
         }
 
-        // On Home the cards keep to a slim column on the left, so the wallpaper shows on the right.
+        // On Home the apps keep to a slim list on the left, so the wallpaper shows on the right.
         val slim = !page.workspace
-        val perRow = if (slim) 2 else 4
+        val perRow = if (slim) 1 else 3
         LazyColumn(
             Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(if (slim) 28.dp else 26.dp),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 28.dp),
         ) {
             if (!page.workspace) item(key = "widgets") { widgets() }
@@ -219,9 +225,8 @@ fun PageScreen(
                             if (inIt.isEmpty()) {
                                 Text(
                                     "Empty. Hold any app and move it here.",
-                                    color = Color.White.copy(alpha = 0.5f),
+                                    color = Look.Muted,
                                     fontSize = 12.sp,
-                                    modifier = Modifier.padding(start = 8.dp, bottom = 6.dp),
                                 )
                             }
                             inIt.chunked(perRow).forEach { row ->
@@ -376,7 +381,7 @@ private val ReadableShadow = androidx.compose.ui.graphics.Shadow(
     blurRadius = 6f,
 )
 
-/** One section: black (see-through on Home), with a thin white line round it, like the wireframe. */
+/** One section: its name in small green capitals, then its apps, straight on the page as in the design. */
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
 private fun SectionBox(
@@ -387,34 +392,29 @@ private fun SectionBox(
     content: @Composable () -> Unit,
 ) {
     Column(
-        Modifier
-            .fillMaxWidth(if (slim) 0.42f else 1f)
-            .then(
-                // On Home there's no box at all: the apps sit right on your wallpaper.
-                if (solid) Modifier
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(Color.Black)
-                    .border(1.dp, Color.White.copy(alpha = 0.7f), RoundedCornerShape(18.dp))
-                else Modifier
-            )
-            .padding(horizontal = 8.dp, vertical = if (solid) 10.dp else 2.dp)
+        verticalArrangement = Arrangement.spacedBy(if (slim) 4.dp else 6.dp),
+        modifier = Modifier.fillMaxWidth(if (slim) 0.5f else 1f),
     ) {
         Text(
             name.uppercase(),
-            color = Color.White,
-            fontSize = 12.sp,
-            letterSpacing = 1.5.sp,
-            style = androidx.compose.ui.text.TextStyle(shadow = ReadableShadow),
+            color = Look.Sage,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            letterSpacing = 1.sp,
+            style = androidx.compose.ui.text.TextStyle(shadow = if (solid) null else ReadableShadow),
             modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(6.dp))
                 .combinedClickable(onClick = {}, onLongClick = onHoldTitle)
-                .padding(start = 8.dp, end = 8.dp, top = 2.dp, bottom = 6.dp),
+                .padding(top = 2.dp, bottom = if (slim) 6.dp else 6.dp),
         )
         content()
     }
 }
 
-/** An app as an icon with its name under it. Tap opens it; hold opens its menu. */
+/**
+ * An app. On Home: a small one-colour icon with its name beside it. On a workspace page: an icon with
+ * its name under it, games with their own art. Tap opens it; hold opens its menu.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun AppCell(
@@ -426,29 +426,49 @@ private fun AppCell(
 ) {
     val context = LocalContext.current
     var menuOpen by remember { mutableStateOf(false) }
+    val press = Modifier
+        .clip(RoundedCornerShape(12.dp))
+        .combinedClickable(
+            onClick = { Apps.launch(context, app) },
+            onLongClick = { onHold(); menuOpen = true },
+        )
     Box(modifier) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .combinedClickable(
-                    onClick = { Apps.launch(context, app) },
-                    onLongClick = { onHold(); menuOpen = true },
+        if (slim) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp).then(press),
+            ) {
+                AppIcon(app, 26.dp, mono = true)
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    app.label,
+                    color = Look.Cream,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    style = androidx.compose.ui.text.TextStyle(shadow = ReadableShadow),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
-                .padding(vertical = 8.dp, horizontal = 2.dp),
-        ) {
-            AppIcon(app, if (slim) 40.dp else 44.dp)
-            Spacer(Modifier.height(4.dp))
-            Text(
-                app.label,
-                color = Color.White,
-                fontSize = if (slim) 10.sp else 11.sp,
-                style = androidx.compose.ui.text.TextStyle(shadow = ReadableShadow),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-            )
+            }
+        } else {
+            val game = HubGames.isGame(app)
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth().then(press).padding(vertical = 6.dp),
+            ) {
+                Box(Modifier.heightIn(min = if (game) 60.dp else 32.dp), contentAlignment = Alignment.Center) {
+                    AppIcon(app, if (game) 60.dp else 30.dp, mono = !game)
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    app.label,
+                    color = Look.Cream,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                )
+            }
         }
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
             actions.forEach { action ->

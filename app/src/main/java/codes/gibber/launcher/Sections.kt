@@ -13,14 +13,14 @@ object Sections {
         // Home keeps to three sections; every other app waits in the swipe-up list
         // (Social, Play, Maps, Work, Tools and Other are guesses that don't show on a page).
         LauncherPage("Home", listOf("Contact", "Money", "Media"), workspace = false),
-        LauncherPage("Dev", listOf("My games", "Code", "AI", "Dev tools"), workspace = true),
+        LauncherPage("Dev", listOf("My games", "Dev tools"), workspace = true),
         LauncherPage("Mechanic", listOf("Jobs", "Parts", "Mechanic tools"), workspace = true),
     )
 
     val ALL = PAGES.flatMap { it.sections }
 
     /** Names used before, kept so apps you already moved stay put. */
-    private val RENAMED = mapOf("Wallet" to "Money", "Games" to "Play", "Dev" to "Code")
+    private val RENAMED = mapOf("Wallet" to "Money", "Games" to "Play", "Dev" to "Dev tools", "Code" to "Dev tools", "AI" to "Dev tools")
 
     private val KNOWN = mapOf(
         "Money" to listOf(
@@ -42,9 +42,10 @@ object Sections {
             "com.facebook.katana", "com.twitter.android", "com.discord", "com.reddit.frontpage", "com.pinterest",
             "tv.twitch.android.app", "com.bereal.ft",
         ),
-        "Code" to listOf("com.github.android", "com.termux", "com.netlify.app", "com.vercel.app"),
-        "AI" to listOf("com.anthropic.claude", "com.openai.chatgpt", "com.google.android.apps.bard"),
+        // Code and AI apps join the Dev tools on the Dev page, as in the design.
         "Dev tools" to listOf(
+            "com.github.android", "com.termux", "com.netlify.app", "com.vercel.app",
+            "com.anthropic.claude", "com.openai.chatgpt", "com.google.android.apps.bard",
             "com.android.settings", "com.sec.android.app.myfiles", "com.google.android.apps.nbu.files",
             "com.google.android.documentsui",
         ),
@@ -85,11 +86,11 @@ object Sections {
         moved[app.key]?.let { m -> return RENAMED[m] ?: m }
         // A game's live app waits in the app list; its menu icon sits on the Dev page.
         if (HubGames.isLive(app)) return "Play"
-        if (HubGames.isGame(app)) return if (HubGames.idOf(app) in hubProjects) "Code" else "My games"
+        if (HubGames.isGame(app)) return if (HubGames.idOf(app) in hubProjects) "Dev tools" else "My games"
         if (HubLink.isSettings(app)) return "Dev tools"
-        if (HubLink.isOwn(app)) return "Code"
+        if (HubLink.isOwn(app)) return "Dev tools"
         // Claude Duet and other Claude apps, by name, since their package names vary.
-        if (app.label.contains("Claude", ignoreCase = true) || app.label.contains("Gemini", ignoreCase = true)) return "AI"
+        if (app.label.contains("Claude", ignoreCase = true) || app.label.contains("Gemini", ignoreCase = true)) return "Dev tools"
         if (app.label.contains("JBL", ignoreCase = true)) return "Media"
         if (Shortcuts.isShortcut(app)) return "Other"
         KNOWN[app.packageName]?.let { return it }
