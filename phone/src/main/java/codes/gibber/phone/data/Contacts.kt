@@ -9,7 +9,6 @@ import android.provider.ContactsContract
 import android.provider.ContactsContract.CommonDataKinds.Email
 import android.provider.ContactsContract.CommonDataKinds.Phone
 import android.provider.ContactsContract.CommonDataKinds.StructuredName
-import java.util.concurrent.ConcurrentHashMap
 
 data class PhoneNumber(val number: String, val label: String)
 
@@ -39,43 +38,36 @@ data class ContactForm(
 data class FormRow(val rowId: Long?, val value: String, val type: Int)
 
 object Contacts {
-    private val cache = ConcurrentHashMap<String, Match>()
-    private val misses = ConcurrentHashMap.newKeySet<String>()
-    private var cacheVersion = -1
+    // Everyone is read once and kept until the contacts change, so a name for a number is a quick
+    // look in memory instead of a question to Android for every row (that took about a minute).
+    @Volatile private var everyone: List<Person> = emptyList()
+    @Volatile private var byKey: Map<String, Match> = emptyMap()
+    @Volatile private var fresh = false
+    private val lock = Any()
 
-    private fun freshCache(version: Int) {
-        if (version != cacheVersion) {
-            cache.clear()
-            misses.clear()
-            cacheVersion = version
+    /** Called when anything in the contacts changes. */
+    fun invalidate() {
+        fresh = false
+    }
+
+    /** The list from the last read, for showing something right away. */
+    fun cached(): List<Person> = everyone
+
+    private fun ensure(context: Context) {
+        if (fresh) return
+        synchronized(lock) {
+            if (!fresh) all(context)
         }
     }
 
-    /** The contact a number belongs to, or null. Remembered until anything changes. */
+    /** The contact a number belongs to, or null. */
+    @Suppress("UNUSED_PARAMETER")
     fun lookup(context: Context, number: String?, version: Int = 0): Match? {
         if (number.isNullOrBlank()) return null
-        freshCache(version)
+        ensure(context)
         val key = Numbers.key(number)
-        cache[key]?.let { return it }
-        if (key in misses) return null
-        val found = try {
-            val uri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(Numbers.clean(number)))
-            context.contentResolver.query(
-                uri,
-                arrayOf(
-                    ContactsContract.PhoneLookup._ID,
-                    ContactsContract.PhoneLookup.DISPLAY_NAME,
-                    ContactsContract.PhoneLookup.PHOTO_THUMBNAIL_URI,
-                ),
-                null, null, null,
-            )?.use { c ->
-                if (c.moveToFirst()) Match(c.getLong(0), c.getString(1) ?: Numbers.pretty(number), c.getString(2)) else null
-            }
-        } catch (_: Exception) {
-            null
-        }
-        if (found != null) cache[key] = found else misses.add(key)
-        return found
+        if (key.isEmpty()) return null
+        return byKey[key]
     }
 
     /** Everyone in your contacts, A to Z, with their numbers. */
@@ -116,16 +108,35 @@ object Contacts {
                 }
             }
         } catch (_: Exception) {
+            return everyone
         }
+        val index = HashMap<String, Match>()
+        for (p in people) for (n in p.numbers) {
+            val key = Numbers.key(n.number)
+            if (key.isNotEmpty() && key !in index) index[key] = Match(p.contactId, p.name, p.photo)
+        }
+        everyone = people
+        byKey = index
+        fresh = true
         return people
     }
 
-    fun person(context: Context, contactId: Long): Person? = all(context).firstOrNull { it.contactId == contactId }
+    fun person(context: Context, contactId: Long): Person? {
+        ensure(context)
+        return everyone.firstOrNull { it.contactId == contactId } ?: all(context).firstOrNull { it.contactId == contactId }
+    }
+
+    /** Everyone, from memory when nothing has changed. */
+    fun everyone(context: Context): List<Person> {
+        ensure(context)
+        return everyone
+    }
 
     private fun phoneLabel(context: Context, type: Int, label: String?): String =
         Phone.getTypeLabel(context.resources, type, label).toString()
 
     fun setStarred(context: Context, contactId: Long, starred: Boolean) {
+        invalidate()
         val values = ContentValues().apply { put(ContactsContract.Contacts.STARRED, if (starred) 1 else 0) }
         context.contentResolver.update(
             ContentUris.withAppendedId(ContactsContract.Contacts.CONTENT_URI, contactId), values, null, null,
@@ -133,6 +144,7 @@ object Contacts {
     }
 
     fun delete(context: Context, contactId: Long) {
+        invalidate()
         context.contentResolver.delete(
             ContentUris.withAppendedId(ContactsContract.Contacts.CONTENT_URI, contactId), null, null,
         )
@@ -253,6 +265,7 @@ object Contacts {
         sync(before.phones, phones, Phone.CONTENT_ITEM_TYPE)
         sync(before.emails, emails, Email.CONTENT_ITEM_TYPE)
 
+        invalidate()
         return try {
             val results = context.contentResolver.applyBatch(ContactsContract.AUTHORITY, ops)
             before.contactId ?: run {

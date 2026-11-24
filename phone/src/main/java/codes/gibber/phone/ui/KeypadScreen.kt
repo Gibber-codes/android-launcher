@@ -84,7 +84,7 @@ fun KeypadScreen(main: MainActivity, start: String) {
     val version by PhoneApp.changes.collectAsState()
     var number by remember(start) { mutableStateOf(start) }
     val people by produceState<List<Person>>(emptyList(), version) {
-        value = withContext(Dispatchers.IO) { Contacts.all(main) }
+        value = withContext(Dispatchers.IO) { Contacts.everyone(main) }
     }
     val digits = number.filter { it.isDigit() }
     val matches = if (digits.length < 2) emptyList() else people.filter { p ->
@@ -192,7 +192,7 @@ fun NewMessageScreen(main: MainActivity, screen: Screen.NewMessage) {
     var query by remember { mutableStateOf("") }
     val picked = remember { mutableStateListOf<String>() }
     val people by produceState<List<Person>>(emptyList(), version) {
-        value = withContext(Dispatchers.IO) { Contacts.all(main) }
+        value = withContext(Dispatchers.IO) { Contacts.everyone(main) }
     }
     val q = query.trim().lowercase()
     val digits = q.filter { it.isDigit() }

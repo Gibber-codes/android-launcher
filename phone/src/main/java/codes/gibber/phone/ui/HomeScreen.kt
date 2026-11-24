@@ -83,11 +83,11 @@ fun HomeScreen(main: MainActivity, resumes: Int) {
     val defaultCalls = remember(resumes) { main.isDefaultCalls() }
     val defaultTexts = remember(resumes) { main.isDefaultTexts() }
 
-    val recent by produceState<List<RecentItem>?>(null, version, resumes) {
+    val recent by produceState<List<RecentItem>?>(Recent.last, version, resumes) {
         value = withContext(Dispatchers.IO) { Recent.load(main, version) }
     }
-    val people by produceState<List<Person>?>(null, version, resumes) {
-        value = withContext(Dispatchers.IO) { Contacts.all(main) }
+    val people by produceState<List<Person>?>(Contacts.cached().ifEmpty { null }, version, resumes) {
+        value = withContext(Dispatchers.IO) { Contacts.everyone(main) }
     }
     val pending by produceState(emptyList<Pending.Item>(), version, resumes) {
         value = withContext(Dispatchers.IO) { Pending.list(main) }

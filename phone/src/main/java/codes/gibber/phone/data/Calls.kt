@@ -75,6 +75,15 @@ object Calls {
     /** Clears the "missed call" mark once you've seen them, and Android's own missed-call notice. */
     @SuppressLint("MissingPermission")
     fun markSeen(context: Context) {
+        val any = try {
+            context.contentResolver.query(
+                CallLog.Calls.CONTENT_URI, arrayOf(CallLog.Calls._ID),
+                CallLog.Calls.NEW + "=1 AND " + CallLog.Calls.TYPE + "=" + CallLog.Calls.MISSED_TYPE, null, null,
+            )?.use { it.count > 0 } ?: false
+        } catch (_: Exception) {
+            false
+        }
+        if (!any) return
         try {
             val values = android.content.ContentValues().apply { put(CallLog.Calls.NEW, 0) }
             context.contentResolver.update(

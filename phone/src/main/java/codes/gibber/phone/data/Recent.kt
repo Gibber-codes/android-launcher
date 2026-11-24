@@ -20,7 +20,13 @@ data class RecentItem(
 }
 
 object Recent {
-    fun load(context: Context, version: Int): List<RecentItem> {
+    /** The last list loaded, so coming back to Home shows it right away. */
+    @Volatile var last: List<RecentItem>? = null
+        private set
+
+    fun load(context: Context, version: Int): List<RecentItem> = build(context, version).also { last = it }
+
+    private fun build(context: Context, version: Int): List<RecentItem> {
         val conversations = Texts.conversations(context)
         val calls = Calls.recent(context)
         val byKey = LinkedHashMap<String, RecentItem>()

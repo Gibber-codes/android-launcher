@@ -23,6 +23,12 @@ class PhoneApp : Application() {
         watch(Telephony.Mms.CONTENT_URI)
         watch(CallLog.Calls.CONTENT_URI)
         watch(ContactsContract.Contacts.CONTENT_URI)
+        try {
+            contentResolver.registerContentObserver(ContactsContract.AUTHORITY_URI, true, object : ContentObserver(handler) {
+                override fun onChange(selfChange: Boolean) = codes.gibber.phone.data.Contacts.invalidate()
+            })
+        } catch (_: SecurityException) {
+        }
     }
 
     private fun makeChannels() {
