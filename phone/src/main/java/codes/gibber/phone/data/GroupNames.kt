@@ -23,6 +23,14 @@ object GroupNames {
         prefs.apply()
     }
 
+    /** True once you've named this group or said "Not now" to naming it. */
+    fun asked(context: Context, addresses: Collection<String>): Boolean =
+        get(context, addresses) != null ||
+            context.getSharedPreferences(FILE, Context.MODE_PRIVATE).getBoolean("skip:" + keyOf(addresses), false)
+
+    fun skip(context: Context, addresses: Collection<String>) =
+        context.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit().putBoolean("skip:" + keyOf(addresses), true).apply()
+
     /** The group's name (yours first, then the phone's own), or its people's first names. */
     fun title(context: Context, addresses: List<String>, phoneName: String? = null): String =
         get(context, addresses) ?: phoneName ?: addresses.joinToString(", ") { a ->

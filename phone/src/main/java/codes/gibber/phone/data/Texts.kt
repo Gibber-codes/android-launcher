@@ -125,7 +125,7 @@ object Texts {
         cols("Conversations", CONVERSATIONS)
         cols("Threads", Uri.parse("content://mms-sms/conversations"))
         cols("Picture texts", Telephony.Mms.CONTENT_URI)
-        return "Gibber Phone build ${codes.gibber.phone.BuildConfig.VERSION_CODE}\n" + lines.joinToString("\n")
+        return "People build ${codes.gibber.phone.BuildConfig.VERSION_CODE}\n" + lines.joinToString("\n")
     }
 
     /** The conversation list built from the texts themselves, for phones whose list can't be read. */

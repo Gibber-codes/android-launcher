@@ -102,7 +102,7 @@ fun HomeScreen(main: MainActivity, resumes: Int) {
             Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Image(painterResource(R.drawable.gibbercodes_logo), null, Modifier.size(34.dp))
                 Spacer(Modifier.width(10.dp))
-                Text("Gibber Phone", color = Ink.Text, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Text("People", color = Ink.Text, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                 IconTap(Icons.Filled.Settings, "Settings") { main.go(Screen.Settings) }
             }
             SearchBox(query, { query = it }, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
@@ -150,7 +150,7 @@ private fun SetupCard(main: MainActivity, needsPermissions: Boolean, defaultCall
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text("Finish setting up", color = Ink.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-        if (needsPermissions) SetupStep("Let Gibber Phone see your contacts, calls and texts", "Allow") { main.askForPermissions() }
+        if (needsPermissions) SetupStep("Let People see your contacts, calls and texts", "Allow") { main.askForPermissions() }
         if (!defaultCalls) SetupStep("Use it for calls", "Make default") { main.askToBeDefault(RoleManager.ROLE_DIALER) }
         if (!defaultTexts) SetupStep("Use it for texts", "Make default") { main.askToBeDefault(RoleManager.ROLE_SMS) }
     }

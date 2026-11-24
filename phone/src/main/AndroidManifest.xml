@@ -41,7 +41,7 @@
 
     <application
         android:name=".PhoneApp"
-        android:label="Gibber Phone"
+        android:label="People"
         android:icon="@mipmap/ic_launcher"
         android:theme="@style/Theme.GibberPhone"
         android:supportsRtl="true">

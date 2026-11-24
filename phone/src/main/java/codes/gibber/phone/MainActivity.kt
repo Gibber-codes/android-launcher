@@ -269,7 +269,7 @@ class MainActivity : ComponentActivity() {
         return role || Telephony.Sms.getDefaultSmsPackage(this) == packageName
     }
 
-    /** Shows Android's own "use Gibber Phone as your default?" question. You answer it there. */
+    /** Shows Android's own "use People as your default?" question. You answer it there. */
     fun askToBeDefault(role: String) {
         val rm = getSystemService(RoleManager::class.java)
         if (!rm.isRoleAvailable(role) || rm.isRoleHeld(role)) return

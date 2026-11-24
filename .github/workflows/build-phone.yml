@@ -61,6 +61,6 @@ jobs:
         run: |
           gh release create "phone-${{ github.run_number }}" gibber-phone.apk \
             --target "${{ github.sha }}" \
-            --title "Gibber Phone build ${{ github.run_number }}" \
+            --title "People build ${{ github.run_number }}" \
             --notes "From ${{ github.ref_name }}. ${NOTES:-Built by hand.}" \
             --prerelease --latest=false

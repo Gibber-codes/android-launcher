@@ -145,7 +145,7 @@ object Notifier {
         val n = NotificationCompat.Builder(context, PhoneApp.CHANNEL_PROBLEMS)
             .setSmallIcon(R.drawable.ic_notify_text)
             .setContentTitle(if (who != null) "A picture message from $who didn't download" else "A picture message didn't download")
-            .setContentText("Mobile data has to be on for these. Open Gibber Phone to try again.")
+            .setContentText("Mobile data has to be on for these. Open People to try again.")
             .setContentIntent(PendingIntent.getActivity(context, DOWNLOAD_FAIL, intent, PendingIntent.FLAG_IMMUTABLE))
             .setAutoCancel(true)
             .build()

@@ -45,8 +45,8 @@ object UpdateNotice {
         if (!allowed(context)) return
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(
-            NotificationChannel(CHANNEL, "Gibber Phone updates", NotificationManager.IMPORTANCE_DEFAULT)
-                .apply { description = "Says when a new Gibber Phone build is out" },
+            NotificationChannel(CHANNEL, "People updates", NotificationManager.IMPORTANCE_DEFAULT)
+                .apply { description = "Says when a new People build is out" },
         )
         val tap = PendingIntent.getActivity(
             context, 0,
@@ -55,7 +55,7 @@ object UpdateNotice {
         )
         val notice = NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
-            .setContentTitle("Gibber Phone update ready")
+            .setContentTitle("People update ready")
             .setContentText("Build $build is out. Tap to update.")
             .setContentIntent(tap)
             .setAutoCancel(true)

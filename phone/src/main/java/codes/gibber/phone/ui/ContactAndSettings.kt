@@ -196,11 +196,11 @@ fun SettingsScreen(main: MainActivity, resumes: Int) {
             Text("Settings", color = Ink.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         }
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            SettingRow("Calls", if (calls) "Gibber Phone handles your calls" else "Samsung's Phone app handles your calls",
+            SettingRow("Calls", if (calls) "People handles your calls" else "Samsung's Phone app handles your calls",
                 if (calls) "Change" else "Make default") {
                 if (calls) main.startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)) else main.askToBeDefault(RoleManager.ROLE_DIALER)
             }
-            SettingRow("Texts", if (texts) "Gibber Phone handles your texts" else "Another app handles your texts",
+            SettingRow("Texts", if (texts) "People handles your texts" else "Another app handles your texts",
                 if (texts) "Change" else "Make default") {
                 if (texts) main.startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)) else main.askToBeDefault(RoleManager.ROLE_SMS)
             }
@@ -214,7 +214,7 @@ fun SettingsScreen(main: MainActivity, resumes: Int) {
                 try {
                     main.startActivity(main.getSystemService(android.telecom.TelecomManager::class.java).createManageBlockedNumbersIntent())
                 } catch (_: Exception) {
-                    Toast.makeText(main, "Make Gibber Phone your calls app first.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(main, "Make People your calls app first.", Toast.LENGTH_SHORT).show()
                 }
             }
             SettingRow("Text storage", "Copies how this phone keeps texts, no messages, to send to Claude", "Copy") {

@@ -182,7 +182,7 @@ fun PersonScreen(main: MainActivity, screen: Screen.Person, resumes: Int) {
                     null
                 }
             }
-            if (t == null) Toast.makeText(main, "Couldn't send. Is Gibber Phone your texting app?", Toast.LENGTH_LONG).show()
+            if (t == null) Toast.makeText(main, "Couldn't send. Is People your texting app?", Toast.LENGTH_LONG).show()
             else threadId = t
             PhoneApp.instance.bump()
         }
@@ -246,7 +246,7 @@ fun PersonScreen(main: MainActivity, screen: Screen.Person, resumes: Int) {
                                         blocked = !blocked
                                     } catch (_: Exception) {
                                         withContext(Dispatchers.Main) {
-                                            Toast.makeText(main, "Make Gibber Phone your calls or texting app to block numbers.", Toast.LENGTH_LONG).show()
+                                            Toast.makeText(main, "Make People your calls or texting app to block numbers.", Toast.LENGTH_LONG).show()
                                         }
                                     }
                                 }
@@ -299,13 +299,38 @@ fun PersonScreen(main: MainActivity, screen: Screen.Person, resumes: Int) {
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
+            if (group && renamed >= 0 && phoneName == null && !GroupNames.asked(main, addresses)) {
+                item(key = "name-group") {
+                    var name by remember { mutableStateOf("") }
+                    Column(
+                        Modifier.padding(vertical = 6.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Ink.Card).padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Text("New group. Give it a name?", color = Ink.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        OutlinedTextField(name, { name = it }, singleLine = true, placeholder = { Text("Group name") }, modifier = Modifier.fillMaxWidth())
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Pill("Save") {
+                                if (name.isNotBlank()) {
+                                    GroupNames.set(main, addresses, name)
+                                    renamed++
+                                    PhoneApp.instance.bump()
+                                }
+                            }
+                            Pill("Not now", Ink.Raised) {
+                                GroupNames.skip(main, addresses)
+                                renamed++
+                            }
+                        }
+                    }
+                }
+            }
             if (!main.canReadTexts()) {
                 item {
                     Column(
                         Modifier.padding(vertical = 6.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Ink.Card).padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        Text("Texts are hidden because Gibber Phone isn't allowed to read them yet.", color = Ink.Text, fontSize = 14.sp)
+                        Text("Texts are hidden because People isn't allowed to read them yet.", color = Ink.Text, fontSize = 14.sp)
                         Pill("Allow texts") { main.askForPermissions() }
                     }
                 }
