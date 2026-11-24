@@ -127,6 +127,10 @@ fun LauncherApp(
                     moved = moved,
                     hubProjects = hubProjects,
                     onAskMove = { moving = it },
+                    onRemove = { a ->
+                        moved = moved + (a.key to Sections.HIDDEN)
+                        prefs.sections = moved
+                    },
                     topBar = {
                         if (i == 0) {
                             HomeTopBar(

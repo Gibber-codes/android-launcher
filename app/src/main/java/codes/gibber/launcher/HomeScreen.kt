@@ -58,6 +58,7 @@ fun PageScreen(
     moved: Map<String, String>,
     hubProjects: Set<String>,
     onAskMove: (AppEntry) -> Unit,
+    onRemove: (AppEntry) -> Unit = {},
     topBar: @Composable () -> Unit = {},
     widgets: @Composable () -> Unit = {},
 ) {
@@ -88,6 +89,7 @@ fun PageScreen(
     }
 
     fun actionsFor(app: AppEntry): List<RowAction> = buildList {
+        add(RowAction("Remove from this card") { onRemove(app) })
         add(RowAction("Move to a section") { onAskMove(app) })
         if (!Shortcuts.isShortcut(app) && !HubLink.isOwn(app)) add(RowAction("App info") { Apps.openInfo(context, app) })
     }
@@ -123,14 +125,21 @@ fun PageScreen(
             )
         }
 
-        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // On Home the cards keep to a slim column on the left, so the wallpaper shows on the right.
+        val slim = !page.workspace
+        val perRow = if (slim) 2 else 4
+        LazyColumn(
+            Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 28.dp),
+        ) {
             if (!page.workspace) item(key = "widgets") { widgets() }
             page.sections.forEach { name ->
                 val inIt = grouped[name].orEmpty()
                 // Home shows only sections with apps; a workspace shows all of its sections, so you can fill them.
                 if (inIt.isNotEmpty() || page.workspace) {
                     item(key = "section-$name") {
-                        SectionBox(name, solid = page.workspace) {
+                        SectionBox(name, solid = page.workspace, slim = slim) {
                             if (inIt.isEmpty()) {
                                 Text(
                                     "Empty. Hold any app and move it here.",
@@ -139,19 +148,19 @@ fun PageScreen(
                                     modifier = Modifier.padding(start = 8.dp, bottom = 6.dp),
                                 )
                             }
-                            inIt.chunked(4).forEach { row ->
+                            inIt.chunked(perRow).forEach { row ->
                                 Row(Modifier.fillMaxWidth()) {
-                                    row.forEach { app -> AppCell(app, actionsFor(app), Modifier.weight(1f)) }
-                                    repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
+                                    row.forEach { app -> AppCell(app, actionsFor(app), Modifier.weight(1f), slim) }
+                                    repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }
                                 }
                             }
                         }
                     }
                 }
             }
-            item(key = "hint") {
+            if (!page.workspace) item(key = "hint") {
                 Text(
-                    "Hold an app to move it. Swipe sideways for your workspaces, up for all apps.",
+                    "Hold an app to move or remove it. Swipe sideways for workspaces, up for all apps.",
                     color = Color.White.copy(alpha = 0.5f),
                     fontSize = 12.sp,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -224,10 +233,10 @@ fun MoveDialog(
 
 /** One section: black (see-through on Home), with a thin white line round it, like the wireframe. */
 @Composable
-private fun SectionBox(name: String, solid: Boolean, content: @Composable () -> Unit) {
+private fun SectionBox(name: String, solid: Boolean, slim: Boolean, content: @Composable () -> Unit) {
     Column(
         Modifier
-            .fillMaxWidth()
+            .fillMaxWidth(if (slim) 0.42f else 1f)
             .clip(RoundedCornerShape(18.dp))
             .background(Color.Black.copy(alpha = if (solid) 1f else 0.55f))
             .border(1.dp, Color.White.copy(alpha = 0.7f), RoundedCornerShape(18.dp))
@@ -247,7 +256,7 @@ private fun SectionBox(name: String, solid: Boolean, content: @Composable () -> 
 /** An app as an icon with its name under it. Tap opens it; hold opens its menu. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun AppCell(app: AppEntry, actions: List<RowAction>, modifier: Modifier) {
+private fun AppCell(app: AppEntry, actions: List<RowAction>, modifier: Modifier, slim: Boolean = false) {
     val context = LocalContext.current
     var menuOpen by remember { mutableStateOf(false) }
     Box(modifier) {
@@ -262,12 +271,12 @@ private fun AppCell(app: AppEntry, actions: List<RowAction>, modifier: Modifier)
                 )
                 .padding(vertical = 8.dp, horizontal = 2.dp),
         ) {
-            AppIcon(app, 44.dp)
+            AppIcon(app, if (slim) 40.dp else 44.dp)
             Spacer(Modifier.height(4.dp))
             Text(
                 app.label,
                 color = Color.White,
-                fontSize = 11.sp,
+                fontSize = if (slim) 10.sp else 11.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
