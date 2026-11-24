@@ -18,6 +18,8 @@ data class AppEntry(
     val activityName: String,
     /** The app calls itself a game (Android's game category). */
     val isGame: Boolean = false,
+    /** Android's category for the app (ApplicationInfo.category), or -1. */
+    val category: Int = -1,
 ) {
     /** Stable id used to save favorites. */
     val key: String get() = "$packageName/$activityName"
@@ -44,6 +46,7 @@ object Apps {
                     packageName = it.activityInfo.packageName,
                     activityName = it.activityInfo.name,
                     isGame = isGame(it.activityInfo.applicationInfo),
+                    category = it.activityInfo.applicationInfo.category,
                 )
             }
             .distinctBy { it.key }
@@ -51,11 +54,13 @@ object Apps {
             .plus(Shortcuts.load(context))
             .plus(HubLink.entry(context))
             .plus(HubLink.settingsEntry(context))
+            .plus(HubGames.entries(context))
             .sortedBy { it.label.lowercase() }
     }
 
     fun loadIcon(context: Context, app: AppEntry, sizePx: Int): Bitmap? =
         when {
+            HubGames.isGame(app) -> HubGames.tile(app, sizePx)
             HubLink.isOwn(app) -> try {
                 context.packageManager.getApplicationIcon(context.packageName).toBitmap(sizePx)
             } catch (e: Exception) {
@@ -73,6 +78,7 @@ object Apps {
     }
 
     fun launch(context: Context, app: AppEntry) {
+        if (HubGames.isGame(app)) return HubGames.open(HubGames.idOf(app))
         if (HubLink.isHub(app)) return HubLink.open()
         if (HubLink.isSettings(app)) return HubLink.openSettings()
         if (Shortcuts.isShortcut(app)) return Shortcuts.launch(context, app)

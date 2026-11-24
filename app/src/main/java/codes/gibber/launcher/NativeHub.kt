@@ -57,14 +57,14 @@ private val Amber = Color(0xFFE8B04B)
 private val Red = Color(0xFFE06C6C)
 
 /** Games that are played on their side: the phone turns to landscape when one opens. */
-private val SIDEWAYS = setOf("dead-tide")
+internal val SIDEWAYS = setOf("dead-tide")
 
 /** What sits on top of the native hub: a game's page (with its workspace), or the full web hub. */
 private data class OpenPage(val url: String, val game: String?)
 
 /** A sideways game turns the phone to landscape while it's on screen, and back when it leaves. */
 @Composable
-private fun GameWindow(sideways: Boolean) {
+internal fun GameWindow(sideways: Boolean) {
     val activity = LocalContext.current.activity() ?: return
     DisposableEffect(activity, sideways) {
         val before = activity.requestedOrientation
@@ -265,7 +265,7 @@ private fun Panel(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun Chip(label: String, strong: Boolean = false, onClick: () -> Unit) {
+internal fun Chip(label: String, strong: Boolean = false, onClick: () -> Unit) {
     Text(
         label,
         color = if (strong) Color(0xFF101014) else Color.White,

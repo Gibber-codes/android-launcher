@@ -20,6 +20,8 @@ data class HubWorkspace(
     /** up, starting, down, or other (something else has its port). */
     val state: String,
     val nav: List<HubNav>,
+    /** The hub's own grouping, like games, or blank. */
+    val group: String = "",
 )
 
 data class HubLimit(val used: Int, val resets: String)
@@ -99,6 +101,7 @@ class HubApi(hubUrl: String) {
                 startable = w.optBoolean("startable"),
                 state = w.optString("state", "down"),
                 nav = nav,
+                group = w.optString("group"),
             )
         }
     }

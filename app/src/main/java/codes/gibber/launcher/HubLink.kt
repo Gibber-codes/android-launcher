@@ -25,5 +25,5 @@ object HubLink {
     fun isSettings(app: AppEntry) = app.activityName == SETTINGS
 
     /** One of the launcher's own entries, which have no Android app info page. */
-    fun isOwn(app: AppEntry) = isHub(app) || isSettings(app)
+    fun isOwn(app: AppEntry) = isHub(app) || isSettings(app) || HubGames.isGame(app)
 }

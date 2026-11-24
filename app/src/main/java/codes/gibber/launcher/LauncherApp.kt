@@ -47,6 +47,11 @@ fun LauncherApp(
         val context = androidx.compose.ui.platform.LocalContext.current
         var hubUrl by remember { mutableStateOf(normalizeHubUrl(prefs.hubUrl)) }
         var settingsOpen by remember { mutableStateOf(false) }
+        var devMode by remember { mutableStateOf(prefs.devMode) }
+        var moved by remember { mutableStateOf(prefs.sections) }
+        var hubProjects by remember { mutableStateOf(prefs.hubProjects) }
+        var gameMenu by remember { mutableStateOf<String?>(null) }
+        var gamePage by remember { mutableStateOf<GamePage?>(null) }
         fun saveHubUrl(raw: String) {
             prefs.hubUrl = normalizeHubUrl(raw)
             hubUrl = prefs.hubUrl
@@ -56,6 +61,10 @@ fun LauncherApp(
             HubLink.openSettings = {
                 drawerOpen = false
                 settingsOpen = true
+            }
+            HubGames.open = { id ->
+                drawerOpen = false
+                gameMenu = id
             }
             HubLink.open = {
                 drawerOpen = false
@@ -71,10 +80,27 @@ fun LauncherApp(
             }
         }
 
+        // Keep the hub's games on the home screen up to date, whenever you come back to it.
+        LaunchedEffect(resumes, hubUrl) {
+            if (hubUrl.isBlank()) return@LaunchedEffect
+            val found = HubApi(hubUrl).workspaces() ?: return@LaunchedEffect
+            val games = found.map { it.id to it.name }
+            val projects = found.filter { it.group.isNotBlank() && !it.group.contains("game", ignoreCase = true) }
+                .map { it.id }.toSet()
+            if (games != prefs.hubGames || projects != prefs.hubProjects) {
+                prefs.hubGames = games
+                prefs.hubProjects = projects
+                hubProjects = projects
+                onAppsChanged()
+            }
+        }
+
         // Pressing Home always brings you back to the favorites.
         LaunchedEffect(homePresses) {
             if (homePresses > 0) {
                 drawerOpen = false
+                gameMenu = null
+                gamePage = null
                 pager.animateScrollToPage(PAGE_HOME)
             }
         }
@@ -102,6 +128,14 @@ fun LauncherApp(
                         favorites = favorites,
                         onFavoritesChange = ::saveFavorites,
                         onOpenDrawer = { drawerOpen = true },
+                        moved = moved,
+                        hubProjects = hubProjects,
+                        onMove = { app, section ->
+                            moved = if (section == null) moved - app.key else moved + (app.key to section)
+                            prefs.sections = moved
+                        },
+                        devMode = devMode,
+                        onDevMode = { devMode = it; prefs.devMode = it },
                     )
                     PAGE_HUB -> HubScreen(
                         hubUrl = hubUrl,
@@ -121,6 +155,24 @@ fun LauncherApp(
                     onAppsChanged = onAppsChanged,
                     resumes = resumes,
                 )
+            }
+            val menuFor = gameMenu
+            if (menuFor != null) {
+                GameMenu(
+                    id = menuFor,
+                    name = prefs.hubGames.firstOrNull { it.first == menuFor }?.second ?: menuFor,
+                    prefs = prefs,
+                    hubUrl = hubUrl,
+                    devMode = devMode,
+                    onPlay = { gamePage = it; gameMenu = null },
+                    onClose = { gameMenu = null },
+                )
+            }
+            val playing = gamePage
+            if (playing != null) {
+                androidx.compose.runtime.key(playing.url) {
+                    GameScreen(page = playing, hubUrl = hubUrl, onClose = { gamePage = null })
+                }
             }
             if (settingsOpen) {
                 SettingsScreen(
