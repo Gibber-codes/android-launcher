@@ -246,22 +246,35 @@ fun MoveDialog(
     )
 }
 
+/** A soft dark shadow so white text reads over any wallpaper. */
+private val ReadableShadow = androidx.compose.ui.graphics.Shadow(
+    color = Color.Black.copy(alpha = 0.9f),
+    offset = androidx.compose.ui.geometry.Offset(0f, 2f),
+    blurRadius = 6f,
+)
+
 /** One section: black (see-through on Home), with a thin white line round it, like the wireframe. */
 @Composable
 private fun SectionBox(name: String, solid: Boolean, slim: Boolean, content: @Composable () -> Unit) {
     Column(
         Modifier
             .fillMaxWidth(if (slim) 0.42f else 1f)
-            .clip(RoundedCornerShape(18.dp))
-            .background(Color.Black.copy(alpha = if (solid) 1f else 0.55f))
-            .border(1.dp, Color.White.copy(alpha = 0.7f), RoundedCornerShape(18.dp))
-            .padding(horizontal = 8.dp, vertical = 10.dp)
+            .then(
+                // On Home there's no box at all: the apps sit right on your wallpaper.
+                if (solid) Modifier
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(Color.Black)
+                    .border(1.dp, Color.White.copy(alpha = 0.7f), RoundedCornerShape(18.dp))
+                else Modifier
+            )
+            .padding(horizontal = 8.dp, vertical = if (solid) 10.dp else 2.dp)
     ) {
         Text(
             name.uppercase(),
             color = Color.White,
             fontSize = 12.sp,
             letterSpacing = 1.5.sp,
+            style = androidx.compose.ui.text.TextStyle(shadow = ReadableShadow),
             modifier = Modifier.padding(start = 8.dp, bottom = 6.dp),
         )
         content()
@@ -298,6 +311,7 @@ private fun AppCell(
                 app.label,
                 color = Color.White,
                 fontSize = if (slim) 10.sp else 11.sp,
+                style = androidx.compose.ui.text.TextStyle(shadow = ReadableShadow),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
