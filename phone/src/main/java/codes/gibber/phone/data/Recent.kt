@@ -15,8 +15,10 @@ data class RecentItem(
     val unread: Boolean,
     val missedCalls: Int,
     val lastCall: CallEntry?,
+    /** A chat-style group that reached the phone with one member, named as a group by Claude. */
+    val chatGroup: Boolean = false,
 ) {
-    val isGroup get() = addresses.size > 1
+    val isGroup get() = addresses.size > 1 || chatGroup
 }
 
 object Recent {
@@ -32,11 +34,13 @@ object Recent {
         val byKey = LinkedHashMap<String, RecentItem>()
 
         for (c in conversations) {
-            if (c.isGroup) {
+            val chatGroup = !c.isGroup && Sorting.threadName(context, c.id) != null
+            if (c.isGroup || chatGroup) {
                 byKey["g:${c.id}"] = RecentItem(
                     key = "g:${c.id}", addresses = c.addresses, threadId = c.id,
-                    name = GroupNames.title(context, c.addresses, c.title), photo = null, contactId = null,
+                    name = GroupNames.title(context, c.addresses, c.title, c.id), photo = null, contactId = null,
                     line = c.snippet.ifBlank { "Picture" }, date = c.date, unread = c.unread, missedCalls = 0, lastCall = null,
+                    chatGroup = chatGroup,
                 )
             } else {
                 val address = c.addresses[0]

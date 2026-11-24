@@ -231,7 +231,7 @@ private fun RecentList(main: MainActivity, list: List<RecentItem>?) {
         return
     }
     // What Claude marked spam on your PC waits at the bottom, folded, instead of mixing in.
-    val (spam, kept) = list.partition { Sorting.spamWhy(main, it.addresses, it.contactId) != null }
+    val (spam, kept) = list.partition { !it.isGroup && Sorting.spamWhy(main, it.addresses, it.contactId) != null }
     var showSpam by rememberSaveable { mutableStateOf(false) }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = listPadding) {
         items(kept, key = { it.key }) { item -> RecentRow(main, item) }

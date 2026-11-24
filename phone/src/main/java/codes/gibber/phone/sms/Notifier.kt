@@ -60,9 +60,9 @@ object Notifier {
         val addresses = conversation?.addresses ?: messages.mapNotNull { it.from }.distinct()
         val me = Person.Builder().setName("You").build()
         val style = NotificationCompat.MessagingStyle(me)
-        if (addresses.size > 1) {
+        if (addresses.size > 1 || codes.gibber.phone.data.Sorting.threadName(context, threadId) != null) {
             style.isGroupConversation = true
-            style.conversationTitle = codes.gibber.phone.data.GroupNames.title(context, addresses, conversation?.title)
+            style.conversationTitle = codes.gibber.phone.data.GroupNames.title(context, addresses, conversation?.title, threadId)
         }
         val people = HashMap<String, Person>()
         var picture: Bitmap? = null

@@ -109,7 +109,9 @@ fun PersonScreen(main: MainActivity, screen: Screen.Person, resumes: Int) {
 
     var addresses by remember(screen) { mutableStateOf(screen.addresses) }
     var threadId by remember(screen) { mutableStateOf(screen.threadId) }
-    val group = addresses.size > 1
+    // A chat-style group reaches the phone with one member; Claude's name for its thread says it's a group.
+    val chatGroup = addresses.size == 1 && Sorting.threadName(main, threadId) != null
+    val group = addresses.size > 1 || chatGroup
 
     val person by produceState<Person?>(null, screen.contactId, addresses, version) {
         value = withContext(Dispatchers.IO) {
@@ -138,7 +140,7 @@ fun PersonScreen(main: MainActivity, screen: Screen.Person, resumes: Int) {
     }
     var naming by remember { mutableStateOf(false) }
     val title = when {
-        group -> phoneName.let { n -> remember(addresses, version, renamed, n) { GroupNames.title(main, addresses, n) } }
+        group -> phoneName.let { n -> remember(addresses, version, renamed, n) { GroupNames.title(main, addresses, n, threadId) } }
         person != null -> person!!.name
         addresses.isNotEmpty() -> Numbers.pretty(addresses[0])
         else -> ""
@@ -254,7 +256,7 @@ fun PersonScreen(main: MainActivity, screen: Screen.Person, resumes: Int) {
                             })
                         }
                     }
-                    if (group) {
+                    if (group && !chatGroup) {
                         DropdownMenuItem({ Text("Name this group") }, { menu = false; naming = true })
                     }
                     threadId?.let { t ->
@@ -300,7 +302,7 @@ fun PersonScreen(main: MainActivity, screen: Screen.Person, resumes: Int) {
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            if (group && renamed >= 0 && phoneName == null && !GroupNames.asked(main, addresses)) {
+            if (group && !chatGroup && renamed >= 0 && phoneName == null && !GroupNames.asked(main, addresses)) {
                 item(key = "name-group") {
                     // Claude's name for it, from the sorting on your PC, is filled in for you to keep or change.
                     val suggested = remember { Sorting.groupName(main, addresses) }
@@ -364,6 +366,13 @@ fun PersonScreen(main: MainActivity, screen: Screen.Person, resumes: Int) {
             }
         }
 
+        // People sends plain texts, so a reply here reaches only the one member the phone knows, not the group.
+        if (chatGroup) {
+            Text(
+                "Replies here go only to ${Contacts.lookup(main, addresses[0])?.name ?: Numbers.pretty(addresses[0])}, as a text, not to the whole group.",
+                color = Ink.Muted, fontSize = 13.sp, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+        }
         // Composer
         if (images.isNotEmpty()) {
             LazyRow(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

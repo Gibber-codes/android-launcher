@@ -20,6 +20,8 @@ data class Sorted(
     val spam: Map<String, String> = emptyMap(),
     /** Group text names by the group's key (its members' keys, sorted). */
     val names: Map<String, String> = emptyMap(),
+    /** Group text names by conversation, for the chat-style groups that reach the phone with one member. */
+    val threads: Map<Long, String> = emptyMap(),
 )
 
 /**
@@ -65,6 +67,9 @@ object Sorting {
         return sorted(context).spam[Numbers.key(addresses[0])]
     }
 
+    /** Claude's name for this conversation, when Claude named it as a group. */
+    fun threadName(context: Context, threadId: Long?): String? = threadId?.let { sorted(context).threads[it] }
+
     fun groupName(context: Context, addresses: Collection<String>): String? =
         if (addresses.size < 2) null else sorted(context).names[groupKey(addresses)]
 
@@ -89,10 +94,16 @@ object Sorting {
                 Numbers.key(s.getString("number")) to (s.optString("why").takeIf { it.isNotBlank() && it != "null" } ?: "Claude marked it spam")
             }
         } ?: emptyMap()
-        val names = o.optJSONArray("groupNames")?.let { a ->
-            (0 until a.length()).map { a.getJSONObject(it) }.associate { g -> groupKey(strings(g.optJSONArray("numbers"))) to g.getString("name") }
-        } ?: emptyMap()
-        Sorted(groups, spam - "", names)
+        val named = o.optJSONArray("groupNames")?.let { a -> (0 until a.length()).map { a.getJSONObject(it) } } ?: emptyList()
+        // A name by members only counts for two or more; one member could be a text with just that person.
+        val names = named.mapNotNull { g ->
+            val nums = strings(g.optJSONArray("numbers"))
+            if (nums.size < 2) null else groupKey(nums) to g.getString("name")
+        }.toMap()
+        val threads = named.mapNotNull { g ->
+            g.optString("thread").toLongOrNull()?.let { it to g.getString("name") }
+        }.toMap()
+        Sorted(groups, spam - "", names, threads)
     } catch (_: Exception) {
         null
     }
@@ -210,7 +221,7 @@ object Sorting {
     }
 
     fun summary(s: Sorted): String =
-        "${s.groups.size} groups, ${s.spam.size} spam, ${s.names.size} group names"
+        "${s.groups.size} groups, ${s.spam.size} spam, ${maxOf(s.names.size, s.threads.size)} group names"
 
     /** A quiet check now and then, so Claude's newest sorting shows without a tap. */
     suspend fun refreshIfDue(context: Context) {
