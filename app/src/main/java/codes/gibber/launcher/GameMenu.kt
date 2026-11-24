@@ -127,6 +127,15 @@ fun GameMenu(
 
     val w = workspace
     val running = w?.state == "up"
+
+    // While the dev server runs, fetch the game's own picture from it, so its icon shows from then on.
+    LaunchedEffect(running, id) {
+        val hub = api
+        val ws = workspace
+        if (running && hub != null && ws != null) {
+            GameIcons.refresh(context, mapOf(id to listOfNotNull(live.ifBlank { null }, hub.pageOf(ws))))
+        }
+    }
     val on = running || w?.state == "starting"
     val (status, statusColor) = when {
         !devMode -> "" to Muted

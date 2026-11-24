@@ -23,7 +23,8 @@ object GameIcons {
     var version by mutableIntStateOf(0)
         private set
 
-    private val lastTry = mutableMapOf<String, Long>()
+    /** When each game was last looked for, and at which addresses (new addresses mean look again). */
+    private val lastTry = mutableMapOf<String, Pair<Long, List<String>>>()
 
     private fun file(context: Context, id: String) = File(File(context.filesDir, "game-icons"), "$id.png")
 
@@ -58,8 +59,9 @@ object GameIcons {
             val f = file(context, id)
             val now = System.currentTimeMillis()
             if (f.exists() && now - f.lastModified() < 6 * 3_600_000L) return@forEach
-            if (now - (lastTry[id] ?: 0L) < 10 * 60_000L) return@forEach
-            lastTry[id] = now
+            val last = lastTry[id]
+            if (last != null && last.second == bases && now - last.first < 10 * 60_000L) return@forEach
+            lastTry[id] = now to bases
             for (base in bases.filter { it.isNotBlank() }) {
                 val bmp = try { findIcon(base) } catch (e: Exception) { null } ?: continue
                 f.parentFile?.mkdirs()
@@ -100,16 +102,39 @@ object GameIcons {
         }
         listOf("/apple-touch-icon.png", "/icon.png", "/favicon.png", "/favicon.ico").forEach { tries += URL(page, it) }
 
-        for (u in tries) {
-            if (u.path.endsWith(".svg", ignoreCase = true)) continue // Android can't draw these without help.
+        // Pictures first; SVG icons after, drawn with the SVG library.
+        for (u in tries.filterNot { isSvg(it) }) {
             val b = image(u) ?: continue
             if (b.width >= 16) return square(b)
+        }
+        for (u in (tries.filter { isSvg(it) } + URL(page, "/favicon.svg") + URL(page, "/icon.svg")).distinctBy { it.toString() }) {
+            svg(u)?.let { return it }
         }
         // Last, the page's preview picture, cut to a square from the middle.
         val og = Regex("<meta\\b[^>]*>", RegexOption.IGNORE_CASE).findAll(html).map { it.value }
             .firstOrNull { (attr(it, "property") ?: attr(it, "name"))?.lowercase() in setOf("og:image", "twitter:image") }
             ?.let { attr(it, "content") }
         return og?.let { image(URL(page, it)) }?.let { square(it) }
+    }
+
+    private fun isSvg(u: URL) = u.path.endsWith(".svg", ignoreCase = true) || u.toString().startsWith("data:image/svg")
+
+    /** Draws an SVG icon at 256 pixels, or null if it isn't one or can't be drawn. */
+    private fun svg(u: URL): Bitmap? = try {
+        val bytes = open(u)?.inputStream?.use { read(it, 1_000_000) }
+        val doc = bytes?.let { com.caverock.androidsvg.SVG.getFromString(it.toString(Charsets.UTF_8)) }
+        if (doc == null) null else {
+            if (doc.documentViewBox == null && doc.documentWidth > 0 && doc.documentHeight > 0) {
+                doc.setDocumentViewBox(0f, 0f, doc.documentWidth, doc.documentHeight)
+            }
+            doc.setDocumentWidth("100%")
+            doc.setDocumentHeight("100%")
+            val bmp = Bitmap.createBitmap(256, 256, Bitmap.Config.ARGB_8888)
+            doc.renderToCanvas(android.graphics.Canvas(bmp))
+            bmp
+        }
+    } catch (e: Throwable) {
+        null
     }
 
     private fun square(b: Bitmap): Bitmap {
