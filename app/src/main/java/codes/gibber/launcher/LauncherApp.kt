@@ -59,6 +59,8 @@ fun LauncherApp(
         }
 
         val context = androidx.compose.ui.platform.LocalContext.current
+        // The equalizer test starts with the launcher, so it hears players that hand over their sound.
+        androidx.compose.runtime.LaunchedEffect(Unit) { Eq.start(context) }
         var hubUrl by remember { mutableStateOf(normalizeHubUrl(prefs.hubUrl)) }
         var settingsOpen by remember { mutableStateOf(false) }
         var moved by remember { mutableStateOf(prefs.sections) }
@@ -199,7 +201,14 @@ fun LauncherApp(
                     // Gibber Settings sits as a small button at the top right of the Dev page.
                     titleAction = if (page.name == "Dev") ({ GearButton { settingsOpen = true } }) else null,
                     onGroupsChange = { groups = it; prefs.groups = it },
-                    top = if (page.name == "Dev") ({ TalkToClaude(prefs) }) else null,
+                    top = if (page.name == "Dev") ({
+                        androidx.compose.foundation.layout.Column(
+                            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
+                        ) {
+                            TalkToClaude(prefs)
+                            EqualizerTest()
+                        }
+                    }) else null,
                     widgets = {
                         WidgetArea(
                             ids = widgetIds,
