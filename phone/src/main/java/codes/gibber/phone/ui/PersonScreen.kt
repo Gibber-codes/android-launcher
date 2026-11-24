@@ -366,6 +366,16 @@ fun PersonScreen(main: MainActivity, screen: Screen.Person, resumes: Int) {
             }
         }
 
+        // While another app, like Google Messages, has your texts, People shows them and hands replies to it.
+        val texting = remember(resumes) { main.isDefaultTexts() }
+        if (!texting) {
+            val app = remember(resumes) { main.textsAppName() ?: "your texts app" }
+            if (addresses.isNotEmpty()) {
+                Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.Center) {
+                    Pill("Text in $app") { main.textTo(addresses) }
+                }
+            }
+        } else {
         // People sends plain texts, so a reply here reaches only the one member the phone knows, not the group.
         if (chatGroup) {
             Text(
@@ -420,6 +430,7 @@ fun PersonScreen(main: MainActivity, screen: Screen.Person, resumes: Int) {
         }
         if (draft.length > 150 && images.isEmpty() && !group) {
             Text("${draft.length} characters, sent as ${(draft.length + 152) / 153} texts", color = Ink.Muted, fontSize = 12.sp, modifier = Modifier.padding(start = 64.dp, bottom = 6.dp))
+        }
         }
     }
 

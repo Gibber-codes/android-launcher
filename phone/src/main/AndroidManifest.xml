@@ -9,6 +9,9 @@
     <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
     <uses-permission android:name="android.permission.READ_CALL_LOG" />
     <uses-permission android:name="android.permission.WRITE_CALL_LOG" />
+    <!-- Android gives these to the default phone app, so People can list and play your voicemails. -->
+    <uses-permission android:name="com.android.voicemail.permission.READ_VOICEMAIL" />
+    <uses-permission android:name="com.android.voicemail.permission.WRITE_VOICEMAIL" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
@@ -37,6 +40,10 @@
     <queries>
         <package android:name="com.android.phone" />
         <package android:name="com.android.mms.service" />
+        <!-- The carrier voicemail apps People can open from its Voicemail tab. -->
+        <package android:name="com.samsung.vvm" />
+        <package android:name="com.samsung.vvm.se" />
+        <package android:name="com.att.mobile.android.vvm" />
         <!-- So Settings can name the app that handles texts, like Google Messages. -->
         <intent>
             <action android:name="android.intent.action.SENDTO" />

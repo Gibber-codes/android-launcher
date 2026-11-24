@@ -33,6 +33,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Dialpad
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
@@ -64,7 +66,11 @@ import codes.gibber.phone.MainActivity
 import codes.gibber.phone.PhoneApp
 import codes.gibber.phone.R
 import codes.gibber.phone.Screen
+import codes.gibber.phone.data.CallRow
+import codes.gibber.phone.data.CallRows
 import codes.gibber.phone.data.Calls
+import codes.gibber.phone.data.Voicemail
+import codes.gibber.phone.data.Voicemails
 import codes.gibber.phone.data.Contacts
 import codes.gibber.phone.data.Numbers
 import codes.gibber.phone.data.Person
@@ -90,6 +96,12 @@ fun HomeScreen(main: MainActivity, resumes: Int) {
     }
     val people by produceState<List<Person>?>(Contacts.cached().ifEmpty { null }, version, resumes) {
         value = withContext(Dispatchers.IO) { Contacts.everyone(main) }
+    }
+    val calls by produceState<List<CallRow>?>(CallRows.last, version, resumes) {
+        value = withContext(Dispatchers.IO) { CallRows.load(main, version) }
+    }
+    val voicemails by produceState<List<Voicemail>?>(null, version, resumes) {
+        value = withContext(Dispatchers.IO) { Voicemails.list(main) }
     }
     val pending by produceState(emptyList<Pending.Item>(), version, resumes) {
         value = withContext(Dispatchers.IO) { Pending.list(main) }
@@ -126,12 +138,19 @@ fun HomeScreen(main: MainActivity, resumes: Int) {
             }
 
             if (query.isBlank()) {
+                val newVoicemails = voicemails?.count { !it.read } ?: 0
                 Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                    Tab("Recent", tab == 0) { tab = 0 }
+                    Tab("Contacts", tab == 0) { tab = 0 }
                     Spacer(Modifier.width(20.dp))
-                    Tab("Everyone", tab == 1) { tab = 1 }
+                    Tab("Calls", tab == 1) { tab = 1 }
+                    Spacer(Modifier.width(20.dp))
+                    Tab(if (newVoicemails > 0) "Voicemail ($newVoicemails)" else "Voicemail", tab == 2) { tab = 2 }
                 }
-                if (tab == 0) RecentList(main, recent) else EveryoneList(main, people)
+                when (tab) {
+                    0 -> EveryoneList(main, people)
+                    1 -> CallsList(main, calls)
+                    else -> VoicemailList(main, voicemails)
+                }
             } else {
                 SearchResults(main, query, recent ?: emptyList(), people ?: emptyList())
             }
@@ -139,7 +158,8 @@ fun HomeScreen(main: MainActivity, resumes: Int) {
 
         // Keypad and new message, bottom right.
         Column(Modifier.align(Alignment.BottomEnd).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Fab(Icons.Filled.Edit, "New message", Ink.Raised) { main.go(Screen.NewMessage()) }
+            // A new text lives in People only while it's your texts app; otherwise texts start in that app.
+            if (main.isDefaultTexts()) Fab(Icons.Filled.Edit, "New message", Ink.Raised) { main.go(Screen.NewMessage()) }
             Fab(Icons.Filled.Dialpad, "Keypad", Ink.Blue) { main.go(Screen.Keypad()) }
         }
     }
@@ -223,32 +243,160 @@ fun SearchBox(value: String, onChange: (String) -> Unit, modifier: Modifier = Mo
 private val listPadding = PaddingValues(bottom = 170.dp)
 
 @Composable
-private fun RecentList(main: MainActivity, list: List<RecentItem>?) {
+private fun CallsList(main: MainActivity, list: List<CallRow>?) {
     if (list == null) return
     if (list.isEmpty()) {
-        Empty("No calls or texts yet.")
+        Empty("No calls yet.")
         return
     }
-    // What Claude marked spam on your PC waits at the bottom, folded, instead of mixing in.
-    val (spam, kept) = list.partition { !it.isGroup && Sorting.spamWhy(main, it.addresses, it.contactId) != null }
+    // Numbers Claude marked spam on your PC fold away at the bottom, as on Recent before.
+    val (spam, kept) = list.partition { it.contactId == null && Sorting.spamWhy(main, listOf(it.number), null) != null }
     var showSpam by rememberSaveable { mutableStateOf(false) }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = listPadding) {
-        items(kept, key = { it.key }) { item -> RecentRow(main, item) }
+        var lastDay = ""
+        for (row in kept) {
+            val day = dayText(row.last.date)
+            if (day != lastDay) {
+                lastDay = day
+                item(key = "d$day${row.last.id}") { Label(day) }
+            }
+            item(key = "c${row.last.id}") { CallRowView(main, row) }
+        }
         if (spam.isNotEmpty()) {
             item(key = "spam") {
-                Row(
-                    Modifier.fillMaxWidth().clickable { showSpam = !showSpam }.padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        if (showSpam) "Hide spam" else "Spam: ${spam.size} hidden by Claude",
-                        color = Ink.Muted, fontSize = 15.sp, modifier = Modifier.weight(1f),
-                    )
-                }
+                Text(
+                    if (showSpam) "Hide spam" else "Spam: ${spam.size} hidden by Claude",
+                    color = Ink.Muted, fontSize = 15.sp,
+                    modifier = Modifier.fillMaxWidth().clickable { showSpam = !showSpam }.padding(horizontal = 16.dp, vertical = 14.dp),
+                )
             }
-            if (showSpam) items(spam, key = { "s${it.key}" }) { item -> RecentRow(main, item) }
+            if (showSpam) items(spam, key = { "s${it.last.id}" }) { CallRowView(main, it) }
         }
     }
+}
+
+@Composable
+private fun CallRowView(main: MainActivity, row: CallRow) {
+    val call = row.last
+    val time = android.text.format.DateUtils.formatDateTime(PhoneApp.instance, call.date, android.text.format.DateUtils.FORMAT_SHOW_TIME)
+    val length = if (call.duration > 0) "  ·  " + if (call.duration < 60) "${call.duration} sec" else "${call.duration / 60} min" else ""
+    Row(
+        Modifier.fillMaxWidth().clickable(enabled = row.number.isNotBlank()) {
+            main.go(Screen.Person(listOf(row.number), null, row.contactId))
+        }.padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Avatar(row.name, row.photo)
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                row.name + if (row.count > 1) " (${row.count})" else "",
+                color = if (call.missed) Ink.Red else Ink.Text, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                fontWeight = if (call.missed && call.isNew) FontWeight.Bold else FontWeight.Normal,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    when {
+                        call.missed -> Icons.Filled.CallMissed
+                        call.outgoing -> Icons.Filled.CallMade
+                        else -> Icons.Filled.CallReceived
+                    },
+                    null, tint = if (call.missed) Ink.Red else Ink.Muted, modifier = Modifier.size(15.dp),
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(call.describe() + "  ·  " + time + length, color = Ink.Muted, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        if (Numbers.dialable(row.number)) IconTap(Icons.Filled.Call, "Call", Ink.Muted) { Calls.place(main, row.number) }
+    }
+}
+
+@Composable
+private fun VoicemailList(main: MainActivity, list: List<Voicemail>?) {
+    val app = remember { Voicemails.appIntent(main) }
+    var playing by remember { mutableStateOf<Long?>(null) }
+    val player = remember { arrayOfNulls<android.media.MediaPlayer>(1) }
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose { player[0]?.release(); player[0] = null }
+    }
+    fun stop() {
+        player[0]?.release()
+        player[0] = null
+        playing = null
+    }
+    fun play(v: Voicemail) {
+        stop()
+        if (!v.hasAudio) {
+            Voicemails.fetch(main, v)
+            android.widget.Toast.makeText(main, "Downloading it. Tap again in a moment.", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+        try {
+            val mp = android.media.MediaPlayer()
+            mp.setDataSource(main, v.uri)
+            mp.setOnCompletionListener { stop() }
+            mp.prepare()
+            mp.start()
+            player[0] = mp
+            playing = v.id
+            Voicemails.markRead(main, v)
+        } catch (_: Exception) {
+            stop()
+            android.widget.Toast.makeText(main, "That recording wouldn't play.", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = listPadding) {
+        item(key = "buttons") {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Pill("Call voicemail") {
+                    if (!Calls.voicemail(main)) android.widget.Toast.makeText(main, "Make People your calls app first.", android.widget.Toast.LENGTH_SHORT).show()
+                }
+                if (app != null) Pill("Open voicemail app", Ink.Raised) { main.startActivity(app) }
+            }
+        }
+        when {
+            list == null -> item(key = "none") {
+                Empty("Android isn't sharing your voicemails with People yet. Make People your calls app, then come back here.")
+            }
+            list.isEmpty() -> item(key = "empty") {
+                Empty(
+                    "No voicemails shared with People. On your phone they may stay in the carrier's voicemail app" +
+                        (if (app != null) ", which the button above opens." else ". Call voicemail to hear them."),
+                )
+            }
+            else -> items(list, key = { "v${it.id}" }) { v -> VoicemailRow(main, v, playing == v.id, { if (playing == v.id) stop() else play(v) }) }
+        }
+    }
+}
+
+@Composable
+private fun VoicemailRow(main: MainActivity, v: Voicemail, playing: Boolean, onPlay: () -> Unit) {
+    val match = remember(v.number) { Contacts.lookup(main, v.number) }
+    val name = match?.name ?: if (v.number.isBlank()) "Private number" else Numbers.pretty(v.number)
+    val length = if (v.duration > 0) "${v.duration / 60}:${(v.duration % 60).toString().padStart(2, '0')}  ·  " else ""
+    Column(Modifier.fillMaxWidth().clickable(onClick = onPlay).padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Avatar(name, match?.photo)
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(name, color = Ink.Text, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = if (v.read) FontWeight.Normal else FontWeight.Bold)
+                Text(length + whenText(v.date) + if (v.read) "" else "  ·  new", color = Ink.Muted, fontSize = 14.sp, maxLines = 1)
+            }
+            IconTap(if (playing) Icons.Filled.Stop else Icons.Filled.PlayArrow, if (playing) "Stop" else "Play", Ink.Blue, onPlay)
+            if (Numbers.dialable(v.number)) IconTap(Icons.Filled.Call, "Call back", Ink.Muted) { Calls.place(main, v.number) }
+        }
+        v.transcript?.let { Text(it, color = Ink.Muted, fontSize = 14.sp, modifier = Modifier.padding(start = 58.dp, top = 2.dp)) }
+    }
+}
+
+/** "Today", "Yesterday", or the date, for the day labels on Calls. */
+private fun dayText(ms: Long): String = when {
+    android.text.format.DateUtils.isToday(ms) -> "Today"
+    android.text.format.DateUtils.isToday(ms + android.text.format.DateUtils.DAY_IN_MILLIS) -> "Yesterday"
+    else -> android.text.format.DateUtils.formatDateTime(
+        PhoneApp.instance, ms,
+        android.text.format.DateUtils.FORMAT_SHOW_WEEKDAY or android.text.format.DateUtils.FORMAT_SHOW_DATE or android.text.format.DateUtils.FORMAT_ABBREV_ALL,
+    )
 }
 
 @Composable
@@ -373,7 +521,7 @@ private fun PersonRow(main: MainActivity, p: Person) {
             p.numbers.firstOrNull()?.let { Text("${it.label} · ${Numbers.pretty(it.number)}", color = Ink.Muted, fontSize = 13.sp, maxLines = 1) }
         }
         p.numbers.firstOrNull()?.let { n ->
-            IconTap(Icons.Filled.Chat, "Text", Ink.Muted) { main.go(Screen.Person(listOf(n.number), null, p.contactId)) }
+            IconTap(Icons.Filled.Chat, "Text", Ink.Muted) { main.textTo(listOf(n.number), p.contactId) }
             IconTap(Icons.Filled.Call, "Call", Ink.Muted) { Calls.place(main, n.number) }
         }
     }
@@ -397,7 +545,7 @@ private fun SearchResults(main: MainActivity, query: String, recent: List<Recent
             item {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Pill("Call ${Numbers.pretty(query)}") { Calls.place(main, query) }
-                    Pill("Text") { main.go(Screen.Person(listOf(query))) }
+                    Pill("Text") { main.textTo(listOf(query)) }
                 }
             }
         }

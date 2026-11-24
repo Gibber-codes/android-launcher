@@ -81,6 +81,46 @@ object Recent {
     }
 }
 
+/** One row on the Calls list: back-to-back calls with one number, newest first. */
+data class CallRow(
+    val key: String,
+    val number: String,
+    val name: String,
+    val photo: String?,
+    val contactId: Long?,
+    val last: CallEntry,
+    val count: Int,
+)
+
+object CallRows {
+    @Volatile var last: List<CallRow>? = null
+        private set
+
+    fun load(context: Context, version: Int): List<CallRow> {
+        val out = ArrayList<CallRow>()
+        for (call in Calls.recent(context)) {
+            if (call.type == android.provider.CallLog.Calls.VOICEMAIL_TYPE) continue
+            val key = Numbers.key(call.number).ifEmpty { "private" }
+            val prev = out.lastOrNull()
+            // Calls in a row with the same number, of the same kind (missed with missed), read as one line.
+            if (prev != null && prev.key == key && prev.last.missed == call.missed) {
+                out[out.size - 1] = prev.copy(count = prev.count + 1)
+                continue
+            }
+            val match = if (call.number.isBlank()) null else Contacts.lookup(context, call.number, version)
+            out.add(
+                CallRow(
+                    key = key, number = call.number,
+                    name = match?.name ?: if (call.number.isBlank()) "Private number" else Numbers.pretty(call.number),
+                    photo = match?.photo, contactId = match?.contactId, last = call, count = 1,
+                ),
+            )
+        }
+        last = out
+        return out
+    }
+}
+
 /** One thing in a person's history: a text or a call. */
 sealed class Moment {
     abstract val date: Long

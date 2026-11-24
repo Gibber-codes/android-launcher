@@ -280,6 +280,26 @@ class MainActivity : ComponentActivity() {
         return role || Telephony.Sms.getDefaultSmsPackage(this) == packageName
     }
 
+    /**
+     * Opens a text to these numbers: in People while it's your texts app, otherwise in the app that is,
+     * like Google Messages. The app is named outright, so Android never offers People back.
+     */
+    fun textTo(numbers: List<String>, contactId: Long? = null) {
+        if (isDefaultTexts() || numbers.isEmpty()) {
+            go(Screen.Person(numbers, null, contactId))
+            return
+        }
+        val pkg = Telephony.Sms.getDefaultSmsPackage(this)
+        try {
+            startActivity(
+                Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + numbers.joinToString(",") { Uri.encode(it) }))
+                    .apply { if (pkg != null) setPackage(pkg) }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        } catch (_: Exception) {
+            go(Screen.Person(numbers, null, contactId))
+        }
+    }
+
     /** The name of the app that handles texts now, like Messages, or null when it can't be read. */
     fun textsAppName(): String? = try {
         Telephony.Sms.getDefaultSmsPackage(this)?.let { pkg ->
