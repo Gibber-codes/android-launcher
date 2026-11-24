@@ -27,8 +27,6 @@ fun SettingsScreen(
     onSaveUrl: (String) -> Unit,
     resumes: Int,
     onClose: () -> Unit,
-    devMode: Boolean,
-    onDevMode: (Boolean) -> Unit,
 ) {
     BackHandler(enabled = true) { onClose() }
     HideSystemBars()
@@ -48,20 +46,6 @@ fun SettingsScreen(
                 .padding(horizontal = 24.dp, vertical = 8.dp),
         )
         AddressForm(current = hubUrl, onSave = { onSaveUrl(it); onClose() })
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text("Dev mode", color = Color.White, fontSize = 17.sp)
-                Text(
-                    "Adds the dev server on your PC to your games' menus.",
-                    color = Color.White.copy(alpha = 0.6f),
-                    fontSize = 13.sp,
-                )
-            }
-            Switch(checked = devMode, onCheckedChange = onDevMode)
-        }
         Spacer(Modifier.height(8.dp))
         Text(
             "Launcher version ${BuildConfig.VERSION_NAME}",

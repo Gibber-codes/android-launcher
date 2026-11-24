@@ -27,6 +27,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.gestures.detectTapGestures
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -59,10 +61,13 @@ fun PageScreen(
     hubProjects: Set<String>,
     onAskMove: (AppEntry) -> Unit,
     onRemove: (AppEntry) -> Unit = {},
-    topBar: @Composable () -> Unit = {},
+    onLongPressWallpaper: (() -> Unit)? = null,
     widgets: @Composable () -> Unit = {},
 ) {
     val context = LocalContext.current
+    // Holding an app opens its own menu; this keeps that hold from also opening the wallpaper's menu.
+    val lastAppHold = remember { longArrayOf(0L) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     val grouped = remember(apps, moved, hubProjects) {
         apps.groupBy { Sections.of(it, moved, hubProjects) }
     }
@@ -112,10 +117,20 @@ fun PageScreen(
                     },
                 )
             }
+            .then(
+                if (onLongPressWallpaper == null) Modifier
+                else Modifier.pointerInput(onLongPressWallpaper) {
+                    detectTapGestures(onLongPress = {
+                        scope.launch {
+                            kotlinx.coroutines.delay(150)
+                            if (System.currentTimeMillis() - lastAppHold[0] > 1_000) onLongPressWallpaper()
+                        }
+                    })
+                }
+            )
             .systemBarsPadding()
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        topBar()
         if (page.workspace) {
             Text(
                 page.name,
@@ -150,7 +165,7 @@ fun PageScreen(
                             }
                             inIt.chunked(perRow).forEach { row ->
                                 Row(Modifier.fillMaxWidth()) {
-                                    row.forEach { app -> AppCell(app, actionsFor(app), Modifier.weight(1f), slim) }
+                                    row.forEach { app -> AppCell(app, actionsFor(app), Modifier.weight(1f), slim) { lastAppHold[0] = System.currentTimeMillis() } }
                                     repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }
                                 }
                             }
@@ -160,7 +175,7 @@ fun PageScreen(
             }
             if (!page.workspace) item(key = "hint") {
                 Text(
-                    "Hold an app to move or remove it. Swipe sideways for workspaces, up for all apps.",
+                    "Hold an app to move or remove it. Hold the wallpaper for widgets. Swipe up for all apps.",
                     color = Color.White.copy(alpha = 0.5f),
                     fontSize = 12.sp,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -256,7 +271,13 @@ private fun SectionBox(name: String, solid: Boolean, slim: Boolean, content: @Co
 /** An app as an icon with its name under it. Tap opens it; hold opens its menu. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun AppCell(app: AppEntry, actions: List<RowAction>, modifier: Modifier, slim: Boolean = false) {
+private fun AppCell(
+    app: AppEntry,
+    actions: List<RowAction>,
+    modifier: Modifier,
+    slim: Boolean = false,
+    onHold: () -> Unit = {},
+) {
     val context = LocalContext.current
     var menuOpen by remember { mutableStateOf(false) }
     Box(modifier) {
@@ -267,7 +288,7 @@ private fun AppCell(app: AppEntry, actions: List<RowAction>, modifier: Modifier,
                 .clip(RoundedCornerShape(12.dp))
                 .combinedClickable(
                     onClick = { Apps.launch(context, app) },
-                    onLongClick = { menuOpen = true },
+                    onLongClick = { onHold(); menuOpen = true },
                 )
                 .padding(vertical = 8.dp, horizontal = 2.dp),
         ) {

@@ -60,7 +60,6 @@ fun LauncherApp(
 
         var hubUrl by remember { mutableStateOf(normalizeHubUrl(prefs.hubUrl)) }
         var settingsOpen by remember { mutableStateOf(false) }
-        var devMode by remember { mutableStateOf(prefs.devMode) }
         var moved by remember { mutableStateOf(prefs.sections) }
         var hubProjects by remember { mutableStateOf(prefs.hubProjects) }
         var gameMenu by remember { mutableStateOf<String?>(null) }
@@ -69,6 +68,7 @@ fun LauncherApp(
         var widgetIds by remember { mutableStateOf(prefs.widgets) }
         var pickingWidget by remember { mutableStateOf(false) }
         var removingWidget by remember { mutableStateOf(false) }
+        var wallMenu by remember { mutableStateOf(false) }
 
         fun saveHubUrl(raw: String) {
             prefs.hubUrl = normalizeHubUrl(raw)
@@ -131,15 +131,7 @@ fun LauncherApp(
                         moved = moved + (a.key to Sections.HIDDEN)
                         prefs.sections = moved
                     },
-                    topBar = {
-                        if (i == 0) {
-                            HomeTopBar(
-                                hasWidgets = widgetIds.isNotEmpty(),
-                                onAddWidget = { pickingWidget = true },
-                                onRemoveWidget = { removingWidget = true },
-                            )
-                        }
-                    },
+                    onLongPressWallpaper = if (i == 0) ({ wallMenu = true }) else null,
                     widgets = {
                         WidgetArea(
                             ids = widgetIds,
@@ -190,7 +182,8 @@ fun LauncherApp(
                     name = prefs.hubGames.firstOrNull { it.first == menuFor }?.second ?: menuFor,
                     prefs = prefs,
                     hubUrl = hubUrl,
-                    devMode = devMode,
+                    // Your games live on the Dev page, so their menus always offer the dev server.
+                    devMode = true,
                     onPlay = { gamePage = it; gameMenu = null },
                     onClose = { gameMenu = null },
                 )
@@ -207,8 +200,37 @@ fun LauncherApp(
                     onSaveUrl = ::saveHubUrl,
                     resumes = resumes,
                     onClose = { settingsOpen = false },
-                    devMode = devMode,
-                    onDevMode = { devMode = it; prefs.devMode = it },
+                )
+            }
+            if (wallMenu) {
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { wallMenu = false },
+                    title = { Text("Home screen") },
+                    text = {
+                        androidx.compose.foundation.layout.Column {
+                            Text(
+                                "Add a widget",
+                                color = Color.White,
+                                fontSize = 17.sp,
+                                modifier = Modifier.fillMaxWidth()
+                                    .clickable { wallMenu = false; pickingWidget = true }
+                                    .padding(vertical = 10.dp),
+                            )
+                            if (widgetIds.isNotEmpty()) {
+                                Text(
+                                    "Remove a widget",
+                                    color = Color.White,
+                                    fontSize = 17.sp,
+                                    modifier = Modifier.fillMaxWidth()
+                                        .clickable { wallMenu = false; removingWidget = true }
+                                        .padding(vertical = 10.dp),
+                                )
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        androidx.compose.material3.TextButton(onClick = { wallMenu = false }) { Text("Cancel") }
+                    },
                 )
             }
             val app = moving
@@ -228,18 +250,3 @@ fun LauncherApp(
     }
 }
 
-/** The thin row at the top of Home: add or remove a widget. */
-@Composable
-private fun HomeTopBar(
-    hasWidgets: Boolean,
-    onAddWidget: () -> Unit,
-    onRemoveWidget: () -> Unit,
-) {
-    val dim = Color.White.copy(alpha = 0.75f)
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
-        Text("+ Widget", color = dim, fontSize = 13.sp, modifier = Modifier.clickable(onClick = onAddWidget).padding(8.dp))
-        if (hasWidgets) {
-            Text("Remove widget", color = dim, fontSize = 13.sp, modifier = Modifier.clickable(onClick = onRemoveWidget).padding(8.dp))
-        }
-    }
-}

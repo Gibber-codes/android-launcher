@@ -11,8 +11,8 @@ object Sections {
 
     val PAGES = listOf(
         LauncherPage("Home", listOf("Contact", "Money", "Media", "Social", "Play", "Maps", "Work", "Tools", "Other"), workspace = false),
-        LauncherPage("Mechanic", listOf("Jobs", "Parts", "Mechanic tools"), workspace = true),
         LauncherPage("Dev", listOf("My games", "Code", "AI"), workspace = true),
+        LauncherPage("Mechanic", listOf("Jobs", "Parts", "Mechanic tools"), workspace = true),
     )
 
     val ALL = PAGES.flatMap { it.sections }
