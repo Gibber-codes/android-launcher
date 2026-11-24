@@ -131,9 +131,13 @@ fun PersonScreen(main: MainActivity, screen: Screen.Person, resumes: Int) {
         value = withContext(Dispatchers.IO) { History.load(main, threadId, callNumbers) }
     }
     var renamed by remember { mutableStateOf(0) }
+    val phoneName by produceState<String?>(null, threadId, version) {
+        val t = threadId
+        value = if (group && t != null) withContext(Dispatchers.IO) { Texts.titleOf(main, t) } else null
+    }
     var naming by remember { mutableStateOf(false) }
     val title = when {
-        group -> remember(addresses, version, renamed) { GroupNames.title(main, addresses) }
+        group -> phoneName.let { n -> remember(addresses, version, renamed, n) { GroupNames.title(main, addresses, n) } }
         person != null -> person!!.name
         addresses.isNotEmpty() -> Numbers.pretty(addresses[0])
         else -> ""

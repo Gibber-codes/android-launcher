@@ -23,9 +23,9 @@ object GroupNames {
         prefs.apply()
     }
 
-    /** The group's name, or its people's first names. */
-    fun title(context: Context, addresses: List<String>): String =
-        get(context, addresses) ?: addresses.joinToString(", ") { a ->
+    /** The group's name (yours first, then the phone's own), or its people's first names. */
+    fun title(context: Context, addresses: List<String>, phoneName: String? = null): String =
+        get(context, addresses) ?: phoneName ?: addresses.joinToString(", ") { a ->
             Contacts.lookup(context, a)?.name?.substringBefore(' ') ?: Numbers.pretty(a)
         }
 }

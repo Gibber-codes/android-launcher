@@ -12,6 +12,8 @@ data class Conversation(
     val snippet: String,
     val date: Long,
     val unread: Boolean,
+    /** A name the phone saved for the conversation, on phones that keep one where other apps can read it. */
+    val title: String? = null,
 ) {
     val isGroup get() = addresses.size > 1
 }
@@ -56,16 +58,28 @@ object Texts {
             arrayOf("_id", "date", "recipient_ids", "snippet", "message_count"),
             arrayOf("_id", "date", "recipient_ids", "snippet"),
         )
-        for (projection in asks) {
+        for (projection in listOf<Array<String>?>(null) + asks) {
             try {
                 cr.query(CONVERSATIONS, projection, null, null, "date DESC")?.use { c ->
+                    val idCol = c.getColumnIndexOrThrow("_id")
+                    val dateCol = c.getColumnIndexOrThrow("date")
+                    val recipCol = c.getColumnIndexOrThrow("recipient_ids")
+                    val snippetCol = c.getColumnIndex("snippet")
+                    val countCol = c.getColumnIndex("message_count")
+                    val nameCol = nameColumn(c.columnNames)
                     while (c.moveToNext()) {
-                        if (projection.size > 4 && !c.isNull(4) && c.getInt(4) == 0) continue
-                        val id = c.getLong(0)
-                        val addresses = (c.getString(2) ?: "").split(' ').filter { it.isNotBlank() }
+                        if (countCol >= 0 && !c.isNull(countCol) && c.getInt(countCol) == 0) continue
+                        val id = c.getLong(idCol)
+                        val addresses = (c.getString(recipCol) ?: "").split(' ').filter { it.isNotBlank() }
                             .mapNotNull { addressById[it] }.filter { it.isNotBlank() }
                         if (addresses.isEmpty()) continue
-                        out.add(Conversation(id, addresses, c.getString(3) ?: "", c.getLong(1), id in unread))
+                        val title = if (nameCol >= 0) try { c.getString(nameCol)?.trim()?.takeIf { it.isNotEmpty() } } catch (_: Exception) { null } else null
+                        out.add(
+                            Conversation(
+                                id, addresses, if (snippetCol >= 0) c.getString(snippetCol) ?: "" else "",
+                                c.getLong(dateCol), id in unread, title,
+                            ),
+                        )
                     }
                 }
                 break
@@ -75,6 +89,43 @@ object Texts {
         }
         if (out.isEmpty()) out.addAll(fromTexts(context, unread))
         return out
+    }
+
+    /** Column names some phones use for a conversation's own name. */
+    private val NAME_COLUMNS = listOf(
+        "group_name", "chat_name", "conversation_name", "conversation_title", "group_title",
+        "subject", "title", "display_name", "name", "alias",
+    )
+
+    private fun nameColumn(columns: Array<String>): Int {
+        val lower = columns.map { it.lowercase() }
+        for (n in NAME_COLUMNS) {
+            val i = lower.indexOf(n)
+            if (i >= 0) return i
+        }
+        return -1
+    }
+
+    /** The phone's own name for a conversation, if it keeps one where Gibber Phone can read it. */
+    fun titleOf(context: Context, threadId: Long): String? =
+        conversations(context).firstOrNull { it.id == threadId }?.title
+
+    /** Which columns the phone's conversation list has, for working out where things are kept. */
+    fun storageInfo(context: Context): String {
+        val lines = ArrayList<String>()
+        fun cols(label: String, uri: Uri) {
+            try {
+                context.contentResolver.query(uri, null, null, null, null)?.use { c ->
+                    lines.add("$label (${c.count}): " + c.columnNames.joinToString(", "))
+                } ?: lines.add("$label: nothing")
+            } catch (e: Exception) {
+                lines.add("$label: ${e.javaClass.simpleName}")
+            }
+        }
+        cols("Conversations", CONVERSATIONS)
+        cols("Threads", Uri.parse("content://mms-sms/conversations"))
+        cols("Picture texts", Telephony.Mms.CONTENT_URI)
+        return "Gibber Phone build ${codes.gibber.phone.BuildConfig.VERSION_CODE}\n" + lines.joinToString("\n")
     }
 
     /** The conversation list built from the texts themselves, for phones whose list can't be read. */

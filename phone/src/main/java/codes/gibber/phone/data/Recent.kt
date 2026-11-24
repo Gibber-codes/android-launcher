@@ -35,7 +35,7 @@ object Recent {
             if (c.isGroup) {
                 byKey["g:${c.id}"] = RecentItem(
                     key = "g:${c.id}", addresses = c.addresses, threadId = c.id,
-                    name = GroupNames.title(context, c.addresses), photo = null, contactId = null,
+                    name = GroupNames.title(context, c.addresses, c.title), photo = null, contactId = null,
                     line = c.snippet.ifBlank { "Picture" }, date = c.date, unread = c.unread, missedCalls = 0, lastCall = null,
                 )
             } else {

@@ -62,7 +62,7 @@ object Notifier {
         val style = NotificationCompat.MessagingStyle(me)
         if (addresses.size > 1) {
             style.isGroupConversation = true
-            style.conversationTitle = codes.gibber.phone.data.GroupNames.title(context, addresses)
+            style.conversationTitle = codes.gibber.phone.data.GroupNames.title(context, addresses, conversation?.title)
         }
         val people = HashMap<String, Person>()
         var picture: Bitmap? = null

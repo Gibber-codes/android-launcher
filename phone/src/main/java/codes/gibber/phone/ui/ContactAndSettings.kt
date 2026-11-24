@@ -184,6 +184,7 @@ private fun RowEditor(
 @Composable
 fun SettingsScreen(main: MainActivity, resumes: Int) {
     val scope = rememberCoroutineScope()
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     val calls = remember(resumes) { main.isDefaultCalls() }
     val texts = remember(resumes) { main.isDefaultTexts() }
     val missing = remember(resumes) { main.missingPermissions() }
@@ -214,6 +215,13 @@ fun SettingsScreen(main: MainActivity, resumes: Int) {
                     main.startActivity(main.getSystemService(android.telecom.TelecomManager::class.java).createManageBlockedNumbersIntent())
                 } catch (_: Exception) {
                     Toast.makeText(main, "Make Gibber Phone your calls app first.", Toast.LENGTH_SHORT).show()
+                }
+            }
+            SettingRow("Text storage", "Copies how this phone keeps texts, no messages, to send to Claude", "Copy") {
+                scope.launch {
+                    val info = withContext(Dispatchers.IO) { codes.gibber.phone.data.Texts.storageInfo(main) }
+                    clipboard.setText(androidx.compose.ui.text.AnnotatedString(info))
+                    android.widget.Toast.makeText(main, "Copied", android.widget.Toast.LENGTH_SHORT).show()
                 }
             }
             SettingRow("Version", update ?: "Build ${BuildConfig.VERSION_CODE}", "Update") {
