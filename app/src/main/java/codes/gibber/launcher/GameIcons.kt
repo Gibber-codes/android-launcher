@@ -141,8 +141,11 @@ object GameIcons {
         return out
     }
 
-    /** Looks for each game's picture at its addresses, in order, and keeps the first that works. */
-    suspend fun refresh(context: Context, places: Map<String, List<String>>) = withContext(Dispatchers.IO) {
+    /**
+     * Looks for each game's picture, and keeps the first that works: the icon the hub reads from the
+     * game's folder on the PC ([fromHub]), then the game's pages at its addresses, in order.
+     */
+    suspend fun refresh(context: Context, places: Map<String, List<String>>, fromHub: Map<String, String> = emptyMap()) = withContext(Dispatchers.IO) {
         var found = false
         places.forEach { (id, bases) ->
             val f = file(context, id)
@@ -151,10 +154,15 @@ object GameIcons {
             if (kind == "chosen" || kind == "app") return@forEach
             if (kind == "found" && now - f.lastModified() < 6 * 3_600_000L) return@forEach
             val last = lastTry[id]
-            if (last != null && last.second == bases && now - last.first < 10 * 60_000L) return@forEach
-            lastTry[id] = now to bases
-            for (base in bases.filter { it.isNotBlank() }) {
-                val bmp = try { findIcon(base) } catch (e: Exception) { null } ?: continue
+            val tries = listOfNotNull(fromHub[id]) + bases
+            if (last != null && last.second == tries && now - last.first < 10 * 60_000L) return@forEach
+            lastTry[id] = now to tries
+            val hubIcon = fromHub[id]?.let { u ->
+                try { image(URL(u))?.let { square(it) } ?: svg(URL(u)) } catch (e: Exception) { null }
+            }
+            for (base in listOf("") + bases.filter { it.isNotBlank() }) {
+                val bmp = if (base.isEmpty()) hubIcon ?: continue
+                    else try { findIcon(base) } catch (e: Exception) { null } ?: continue
                 f.parentFile?.mkdirs()
                 f.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
                 kindFile(context, id).writeText("found")

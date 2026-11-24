@@ -45,6 +45,9 @@ data class HubInboxItem(val id: String, val kind: String, val state: String, val
 class HubApi(hubUrl: String) {
     private val base: String = Uri.parse(hubUrl).let { "${it.scheme ?: "http"}://${it.encodedAuthority}" }
 
+    /** Where the hub hands out a game's icon, read from its folder on the PC. */
+    fun iconUrl(id: String) = "$base/api/workspaces/icon/${Uri.encode(id)}"
+
     class Answer(val code: Int, val body: String)
 
     private suspend fun call(path: String, post: JSONObject? = null): Answer? = withContext(Dispatchers.IO) {

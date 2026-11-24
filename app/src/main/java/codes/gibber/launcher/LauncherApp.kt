@@ -136,6 +136,8 @@ fun LauncherApp(
                         if (pc != null && ports[id] != null) "http://$pc:${ports[id]}/" else null,
                     )
                 },
+                // The hub reads each game's icon from its folder on the PC, running or not.
+                fromHub = if (found == null) emptyMap() else HubApi(hubUrl).let { hub -> ports.keys.associateWith { hub.iconUrl(it) } },
             )
             if (found == null) return@LaunchedEffect
             val games = found.map { it.id to it.name }
