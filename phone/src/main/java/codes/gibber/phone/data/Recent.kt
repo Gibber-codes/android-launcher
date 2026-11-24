@@ -33,10 +33,9 @@ object Recent {
 
         for (c in conversations) {
             if (c.isGroup) {
-                val names = c.addresses.map { a -> Contacts.lookup(context, a, version)?.name?.substringBefore(' ') ?: Numbers.pretty(a) }
                 byKey["g:${c.id}"] = RecentItem(
                     key = "g:${c.id}", addresses = c.addresses, threadId = c.id,
-                    name = names.joinToString(", "), photo = null, contactId = null,
+                    name = GroupNames.title(context, c.addresses), photo = null, contactId = null,
                     line = c.snippet.ifBlank { "Picture" }, date = c.date, unread = c.unread, missedCalls = 0, lastCall = null,
                 )
             } else {

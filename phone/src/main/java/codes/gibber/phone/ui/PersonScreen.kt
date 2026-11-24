@@ -81,6 +81,10 @@ import codes.gibber.phone.Screen
 import codes.gibber.phone.data.Calls
 import codes.gibber.phone.data.Contacts
 import codes.gibber.phone.data.History
+import codes.gibber.phone.data.GroupNames
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.AlertDialog
 import codes.gibber.phone.data.Moment
 import codes.gibber.phone.data.Msg
 import codes.gibber.phone.data.MsgState
@@ -126,8 +130,10 @@ fun PersonScreen(main: MainActivity, screen: Screen.Person, resumes: Int) {
     val history by produceState<List<Moment>?>(null, threadId, callNumbers, version, resumes) {
         value = withContext(Dispatchers.IO) { History.load(main, threadId, callNumbers) }
     }
+    var renamed by remember { mutableStateOf(0) }
+    var naming by remember { mutableStateOf(false) }
     val title = when {
-        group -> addresses.joinToString(", ") { Contacts.lookup(main, it, version)?.name?.substringBefore(' ') ?: Numbers.pretty(it) }
+        group -> remember(addresses, version, renamed) { GroupNames.title(main, addresses) }
         person != null -> person!!.name
         addresses.isNotEmpty() -> Numbers.pretty(addresses[0])
         else -> ""
@@ -243,6 +249,9 @@ fun PersonScreen(main: MainActivity, screen: Screen.Person, resumes: Int) {
                             })
                         }
                     }
+                    if (group) {
+                        DropdownMenuItem({ Text("Name this group") }, { menu = false; naming = true })
+                    }
                     threadId?.let { t ->
                         DropdownMenuItem({ Text("Delete conversation", color = Ink.Red) }, {
                             menu = false
@@ -254,6 +263,26 @@ fun PersonScreen(main: MainActivity, screen: Screen.Person, resumes: Int) {
                     }
                 }
             }
+        }
+
+        if (naming) {
+            var name by remember { mutableStateOf(GroupNames.get(main, addresses) ?: "") }
+            AlertDialog(
+                onDismissRequest = { naming = false },
+                title = { Text("Name this group") },
+                text = {
+                    OutlinedTextField(name, { name = it }, singleLine = true, placeholder = { Text("Group name") })
+                },
+                confirmButton = {
+                    TextButton({
+                        GroupNames.set(main, addresses, name)
+                        naming = false
+                        renamed++
+                        PhoneApp.instance.bump()
+                    }) { Text("Save") }
+                },
+                dismissButton = { TextButton({ naming = false }) { Text("Cancel") } },
+            )
         }
 
         // Timeline
