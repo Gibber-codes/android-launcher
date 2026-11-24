@@ -31,24 +31,7 @@ object GameIcons {
         val f = file(context, id)
         if (!f.exists()) return null
         val b = BitmapFactory.decodeFile(f.path) ?: return null
-        return appShaped(b, size)
-    }
-
-    /**
-     * A picture cut to the rounded square the phone's own app icons have, a little in from the edge
-     * like theirs, so a game sits among the other apps as one of them.
-     */
-    fun appShaped(src: Bitmap, size: Int): Bitmap {
-        val out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-        val c = android.graphics.Canvas(out)
-        val inset = size * 0.06f
-        val box = android.graphics.RectF(inset, inset, size - inset, size - inset)
-        val r = box.width() * 0.3f
-        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.FILTER_BITMAP_FLAG)
-        c.drawRoundRect(box, r, r, paint)
-        paint.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_IN)
-        c.drawBitmap(src, null, box, paint)
-        return out
+        return Bitmap.createScaledBitmap(b, size, size, true)
     }
 
     /** Looks for each game's picture at its addresses, in order, and keeps the first that works. */

@@ -129,19 +129,6 @@ fun LauncherApp(
         // Coming back from an app closes the drawer.
         LaunchedEffect(resumes) { drawerOpen = false }
 
-        // A Music group on Home holding Spotify and the JBL app, made once both are installed.
-        LaunchedEffect(apps) {
-            if (prefs.musicMade) return@LaunchedEffect
-            val music = apps.filter { it.packageName == "com.spotify.music" } +
-                apps.filter { it.label.contains("JBL", ignoreCase = true) }
-            if (music.none { it.packageName == "com.spotify.music" } || music.size < 2) return@LaunchedEffect
-            val keys = music.map { it.key }.distinct()
-            val rest = groups.map { g -> g.copy(keys = g.keys - keys.toSet()) }.filter { it.keys.size >= 2 }
-            groups = rest + AppGroup("music", "Music", keys)
-            prefs.groups = groups
-            prefs.musicMade = true
-        }
-
         // A home screen has nowhere to go back to, so Back goes to the Home page and stops there.
         BackHandler(enabled = true) { scope.launch { pager.animateScrollToPage(0) } }
         BackHandler(enabled = drawerOpen) { drawerOpen = false }
