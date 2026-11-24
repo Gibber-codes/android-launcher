@@ -152,7 +152,12 @@ fun HomeScreen(main: MainActivity, resumes: Int) {
                     else -> VoicemailList(main, voicemails)
                 }
             } else {
-                SearchResults(main, query, recent ?: emptyList(), people ?: emptyList())
+                // Texts live in the texts app when that isn't People, so search finds calls, not texts.
+                val texting = remember(resumes) { main.isDefaultTexts() }
+                val searchable = recent.orEmpty().let { all ->
+                    if (texting) all else all.filter { !it.isGroup && it.lastCall != null }.map { it.copy(line = it.lastCall!!.describe(), unread = false) }
+                }
+                SearchResults(main, query, searchable, people ?: emptyList())
             }
         }
 
@@ -356,7 +361,11 @@ private fun VoicemailList(main: MainActivity, list: List<Voicemail>?) {
         }
         when {
             list == null -> item(key = "none") {
-                Empty("Android isn't sharing your voicemails with People yet. Make People your calls app, then come back here.")
+                Empty(
+                    if (main.isDefaultCalls()) "Your phone keeps your voicemails in its own voicemail app, and doesn't share them with People. " +
+                        "Use the buttons above to hear them."
+                    else "Make People your calls app, then come back here to see if your voicemails show up.",
+                )
             }
             list.isEmpty() -> item(key = "empty") {
                 Empty(

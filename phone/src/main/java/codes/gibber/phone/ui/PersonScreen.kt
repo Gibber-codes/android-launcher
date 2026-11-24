@@ -130,8 +130,10 @@ fun PersonScreen(main: MainActivity, screen: Screen.Person, resumes: Int) {
         }
     }
     val callNumbers = if (group) emptyList() else (person?.numbers?.map { it.number } ?: addresses)
+    // While another app, like Google Messages, has your texts, People shows only calls here; texts live there.
+    val texting = remember(resumes) { main.isDefaultTexts() }
     val history by produceState<List<Moment>?>(null, threadId, callNumbers, version, resumes) {
-        value = withContext(Dispatchers.IO) { History.load(main, threadId, callNumbers) }
+        value = withContext(Dispatchers.IO) { History.load(main, if (texting) threadId else null, callNumbers) }
     }
     var renamed by remember { mutableStateOf(0) }
     val phoneName by produceState<String?>(null, threadId, version) {
@@ -149,6 +151,7 @@ fun PersonScreen(main: MainActivity, screen: Screen.Person, resumes: Int) {
     // Opening a conversation reads it, and its notification goes away.
     LaunchedEffect(threadId, version) {
         val t = threadId ?: return@LaunchedEffect
+        if (!texting) return@LaunchedEffect
         withContext(Dispatchers.IO) { Texts.markRead(main, t) }
         Notifier.cancel(main, t)
     }
@@ -366,8 +369,7 @@ fun PersonScreen(main: MainActivity, screen: Screen.Person, resumes: Int) {
             }
         }
 
-        // While another app, like Google Messages, has your texts, People shows them and hands replies to it.
-        val texting = remember(resumes) { main.isDefaultTexts() }
+        // Replies go to the texts app too.
         if (!texting) {
             val app = remember(resumes) { main.textsAppName() ?: "your texts app" }
             if (addresses.isNotEmpty()) {
