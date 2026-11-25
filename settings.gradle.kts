@@ -13,4 +13,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "GibberLauncher"
-include(":app")
+include(":app", ":phone")

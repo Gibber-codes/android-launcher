@@ -1,10 +1,13 @@
 name: Build APK
 
-# A branch builds too, so a pull request's version reaches the phone's Update button before it merges.
-# Its build is posted like main's (the Update button reads the newest release); merging posts a newer one.
+# A job's branch builds too, to check it compiles; only main posts a build for the Update button.
 on:
   push:
     branches: ["**"]
+    # People has its own workflow (build-phone.yml).
+    paths-ignore:
+      - "phone/**"
+      - ".github/workflows/build-phone.yml"
   workflow_dispatch:
 
 permissions:
@@ -52,7 +55,7 @@ jobs:
         run: |
           if [ -z "$LAUNCHER_KEYSTORE" ]; then unset LAUNCHER_KEYSTORE; fi
           chmod +x gradlew
-          ./gradlew assembleRelease
+          ./gradlew :app:assembleRelease
           cp app/build/outputs/apk/release/app-release.apk gibber-launcher.apk
 
       - uses: actions/upload-artifact@v4
@@ -60,16 +63,15 @@ jobs:
           name: gibber-launcher-apk
           path: gibber-launcher.apk
 
-      # One plain APK per build on the repo's Releases, which the launcher's Update button reads.
-      # "[no release]" in the commit message builds without posting, to check a branch compiles first.
+      # One plain APK per main build on the repo's Releases, which the launcher's Update button reads.
+      # "[no release]" in a commit message on main builds without posting.
       - name: Publish the release
-        if: steps.key.outputs.signed == 'true' && !contains(github.event.head_commit.message, '[no release]')
+        if: steps.key.outputs.signed == 'true' && github.ref_name == 'main' && !contains(github.event.head_commit.message, '[no release]')
         env:
           GH_TOKEN: ${{ github.token }}
           NOTES: ${{ github.event.head_commit.message }}
         run: |
           TITLE="Build ${{ github.run_number }}"
-          if [ "${{ github.ref_name }}" != "main" ]; then TITLE="$TITLE from ${{ github.ref_name }}"; fi
           gh release create "build-${{ github.run_number }}" gibber-launcher.apk \
             --target "${{ github.sha }}" \
             --title "$TITLE" \

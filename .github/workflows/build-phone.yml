@@ -1,0 +1,67 @@
+name: Build Gibber Phone
+
+# People, the calls and contacts app. It builds on any branch that changes it, to check it compiles;
+# each signed build from main is posted as a "phone-N" pre-release, so the launcher's own Update
+# button never picks it up.
+on:
+  push:
+    paths:
+      - "phone/**"
+      - ".github/workflows/build-phone.yml"
+      - "settings.gradle.kts"
+      - "build.gradle.kts"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Same signing key as the launcher (signing/launcher.p12, locked with LAUNCHER_KEY_PASSWORD).
+      - name: Signing key
+        id: key
+        env:
+          PW: ${{ secrets.LAUNCHER_KEY_PASSWORD }}
+        run: |
+          if [ -z "$PW" ] || [ ! -f signing/launcher.p12 ]; then
+            echo "::warning::No signing key yet, so this build uses a throwaway key and isn't posted."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Test and build the APK
+        env:
+          LAUNCHER_KEYSTORE: ${{ steps.key.outputs.signed == 'true' && format('{0}/signing/launcher.p12', github.workspace) || '' }}
+          LAUNCHER_KEY_PASSWORD: ${{ secrets.LAUNCHER_KEY_PASSWORD }}
+        run: |
+          if [ -z "$LAUNCHER_KEYSTORE" ]; then unset LAUNCHER_KEYSTORE; fi
+          chmod +x gradlew
+          ./gradlew :phone:testReleaseUnitTest :phone:assembleRelease
+          cp phone/build/outputs/apk/release/phone-release.apk gibber-phone.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gibber-phone-apk
+          path: gibber-phone.apk
+
+      - name: Post the build
+        if: steps.key.outputs.signed == 'true' && github.ref_name == 'main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOTES: ${{ github.event.head_commit.message }}
+        run: |
+          gh release create "phone-${{ github.run_number }}" gibber-phone.apk \
+            --target "${{ github.sha }}" \
+            --title "People build ${{ github.run_number }}" \
+            --notes "From ${{ github.ref_name }}. ${NOTES:-Built by hand.}" \
+            --prerelease --latest=false

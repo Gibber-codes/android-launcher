@@ -1,0 +1,154 @@
+package codes.gibber.phone.data
+
+import android.content.Context
+
+/** One row on the Recent list: a person or group, with their latest text or call. */
+data class RecentItem(
+    val key: String,
+    val addresses: List<String>,
+    val threadId: Long?,
+    val name: String,
+    val photo: String?,
+    val contactId: Long?,
+    val line: String,
+    val date: Long,
+    val unread: Boolean,
+    val missedCalls: Int,
+    val lastCall: CallEntry?,
+    /** A chat-style group that reached the phone with one member, named as a group by Claude. */
+    val chatGroup: Boolean = false,
+) {
+    val isGroup get() = addresses.size > 1 || chatGroup
+}
+
+object Recent {
+    /** The last list loaded, so coming back to Home shows it right away. */
+    @Volatile var last: List<RecentItem>? = null
+        private set
+
+    fun load(context: Context, version: Int): List<RecentItem> = build(context, version).also { last = it }
+
+    private fun build(context: Context, version: Int): List<RecentItem> {
+        val conversations = Texts.conversations(context)
+        val calls = Calls.recent(context)
+        val byKey = LinkedHashMap<String, RecentItem>()
+
+        for (c in conversations) {
+            val chatGroup = !c.isGroup && Sorting.threadName(context, c.id) != null
+            if (c.isGroup || chatGroup) {
+                byKey["g:${c.id}"] = RecentItem(
+                    key = "g:${c.id}", addresses = c.addresses, threadId = c.id,
+                    name = GroupNames.title(context, c.addresses, c.title, c.id), photo = null, contactId = null,
+                    line = c.snippet.ifBlank { "Picture" }, date = c.date, unread = c.unread, missedCalls = 0, lastCall = null,
+                    chatGroup = chatGroup,
+                )
+            } else {
+                val address = c.addresses[0]
+                val key = Numbers.key(address)
+                if (byKey.containsKey(key)) continue
+                val match = Contacts.lookup(context, address, version)
+                byKey[key] = RecentItem(
+                    key = key, addresses = c.addresses, threadId = c.id,
+                    name = match?.name ?: Numbers.pretty(address), photo = match?.photo, contactId = match?.contactId,
+                    line = c.snippet.ifBlank { "Picture" }, date = c.date, unread = c.unread, missedCalls = 0, lastCall = null,
+                )
+            }
+        }
+
+        for (call in calls) {
+            if (call.number.isBlank()) continue
+            val key = Numbers.key(call.number)
+            val item = byKey[key]
+            val missedNew = if (call.missed && call.isNew) 1 else 0
+            if (item == null) {
+                val match = Contacts.lookup(context, call.number, version)
+                byKey[key] = RecentItem(
+                    key = key, addresses = listOf(call.number), threadId = null,
+                    name = match?.name ?: Numbers.pretty(call.number), photo = match?.photo, contactId = match?.contactId,
+                    line = call.describe(), date = call.date, unread = false, missedCalls = missedNew, lastCall = call,
+                )
+            } else {
+                val newer = call.date > item.date
+                byKey[key] = item.copy(
+                    line = if (newer) call.describe() else item.line,
+                    date = maxOf(item.date, call.date),
+                    missedCalls = item.missedCalls + missedNew,
+                    lastCall = item.lastCall ?: call,
+                )
+            }
+        }
+        return byKey.values.sortedByDescending { it.date }
+    }
+}
+
+/** One row on the Calls list: back-to-back calls with one number, newest first. */
+data class CallRow(
+    val key: String,
+    val number: String,
+    val name: String,
+    val photo: String?,
+    val contactId: Long?,
+    val last: CallEntry,
+    val count: Int,
+)
+
+object CallRows {
+    @Volatile var last: List<CallRow>? = null
+        private set
+
+    fun load(context: Context, version: Int): List<CallRow> {
+        val out = ArrayList<CallRow>()
+        for (call in Calls.recent(context)) {
+            if (call.type == android.provider.CallLog.Calls.VOICEMAIL_TYPE) continue
+            val key = Numbers.key(call.number).ifEmpty { "private" }
+            val prev = out.lastOrNull()
+            // Calls in a row with the same number, of the same kind (missed with missed), read as one line.
+            if (prev != null && prev.key == key && prev.last.missed == call.missed) {
+                out[out.size - 1] = prev.copy(count = prev.count + 1)
+                continue
+            }
+            val match = if (call.number.isBlank()) null else Contacts.lookup(context, call.number, version)
+            out.add(
+                CallRow(
+                    key = key, number = call.number,
+                    name = match?.name ?: if (call.number.isBlank()) "Private number" else Numbers.pretty(call.number),
+                    photo = match?.photo, contactId = match?.contactId, last = call, count = 1,
+                ),
+            )
+        }
+        last = out
+        return out
+    }
+}
+
+/** One thing in a person's history: a text or a call. */
+sealed class Moment {
+    abstract val date: Long
+    data class Text(val msg: Msg) : Moment() {
+        override val date get() = msg.date
+    }
+    data class Phone(val call: CallEntry) : Moment() {
+        override val date get() = call.date
+    }
+}
+
+object History {
+    /** Texts in the conversation and calls with any of these numbers, oldest first. */
+    fun load(context: Context, threadId: Long?, numbers: List<String>): List<Moment> {
+        val out = ArrayList<Moment>()
+        if (threadId != null) Texts.messages(context, threadId).forEach { out.add(Moment.Text(it)) }
+        if (numbers.isNotEmpty()) {
+            val keys = numbers.map { Numbers.key(it) }.toSet()
+            Calls.recent(context, 2000).filter { Numbers.key(it.number) in keys }.take(300).forEach { out.add(Moment.Phone(it)) }
+        }
+        out.sortBy { it.date }
+        return out
+    }
+
+    /** The conversation with exactly these people, if there is one yet. */
+    fun findThread(context: Context, addresses: List<String>): Long? {
+        val keys = addresses.map { Numbers.key(it) }.toSet()
+        Texts.conversations(context).firstOrNull { c -> c.addresses.map { Numbers.key(it) }.toSet() == keys }?.id?.let { return it }
+        return if (addresses.size == 1) Texts.threadWith(context, addresses[0]) else null
+    }
+}

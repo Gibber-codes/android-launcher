@@ -25,9 +25,9 @@ Built with Kotlin and Jetpack Compose. Android 8 or newer.
 
 ## Get it on your phone
 
-Every push builds a new version and posts it on this repo's **Releases** page as `gibber-launcher.apk`,
-a branch's too, so a pull request can be tried on the phone before it merges. A commit whose message
-holds `[no release]` builds without posting.
+Every push to `main` builds a new version and posts it on this repo's **Releases** page as
+`gibber-launcher.apk`. A job's branch builds too, only to check it compiles; it reaches the phone once
+it's merged into `main`. A commit on `main` whose message holds `[no release]` builds without posting.
 
 **First install:** on your phone, open the newest release, tap `gibber-launcher.apk`, and install it. Then press Home and pick **Gibber Launcher** (Settings > Apps > Choose default apps > Home app on Samsung).
 
