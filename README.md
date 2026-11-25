@@ -14,7 +14,7 @@ background with slowly drifting gradient circles behind frosted glass.
 - **Hold an app:** Move to a section, Merge, Remove from this card, Uninstall. **Hold a section's name:** edit mode, where you tick apps and remove or merge them at once.
 - **Tap a game:** its pop-up, with Play, the dev server switch, Dev build, Style, Talk and older versions.
 - **Gibber Hub, Gibber Settings and Ideas** are apps in the list and open full screen.
-- Pressing your phone's Home button always brings you back to Home.
+- Pressing your phone's Home button in another app brings the launcher back on the page you left (music, the app list, Gibber Hub, Dev, a game). Pressing it again on the launcher goes to Home.
 
 Built with Kotlin and Jetpack Compose. Android 8 or newer.
 
