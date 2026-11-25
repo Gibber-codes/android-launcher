@@ -99,14 +99,14 @@ object Updater {
         }
         if (!canInstall(context)) {
             busy(null)
-            say("Turn on Allow for Gibber Launcher, come back, and tap Update again.")
+            say("Turn on Allow for Gibber Launcher, come back, and tap Check again.")
             openInstallPermission(context)
             return
         }
         busy("Downloading…")
         val apk = download(context, release)
         busy(null)
-        if (apk == null) say("The download didn't finish. Tap Update to try again.")
+        if (apk == null) say("The download didn't finish. Tap Check to try again.")
         else if (!installQuietly(context, apk)) openInstaller(context, apk)
     }
 
