@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
+import android.media.MediaRouter2
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -116,10 +117,35 @@ object Speakers {
         emptySet()
     }
 
+    /** Android's full Bluetooth settings screen. */
     fun openBluetooth(context: Context) {
         try {
             context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } catch (_: Throwable) { }
+    }
+
+    /**
+     * The system's pop-up for picking where sound plays (speakers and headphones), the one the
+     * notification shade opens; Bluetooth settings where the phone has no such pop-up for apps.
+     */
+    fun openOutputs(context: Context) {
+        if (Build.VERSION.SDK_INT >= 34) {
+            val shown = try { MediaRouter2.getInstance(context).showSystemOutputSwitcher() } catch (_: Throwable) { false }
+            if (shown) return
+        } else if (Build.VERSION.SDK_INT >= 30) {
+            // SystemUI's own output dialog (AOSP's MediaOutputDialogReceiver). A broadcast can't say
+            // whether anything showed, so this isn't promised: a phone whose SystemUI ignores it
+            // shows nothing. Android 14+ has the call above instead.
+            try {
+                context.sendBroadcast(
+                    Intent("com.android.systemui.action.LAUNCH_MEDIA_OUTPUT_DIALOG")
+                        .setPackage("com.android.systemui")
+                        .putExtra("package_name", context.packageName),
+                )
+                return
+            } catch (_: Throwable) { }
+        }
+        openBluetooth(context)
     }
 
     /** Opens the maker's app; when it isn't on the phone, the Play Store's search for it. */
@@ -143,7 +169,8 @@ object Speakers {
 
 /**
  * Your speaker and headphones under Playing on, each saying whether it's connected; a tap opens
- * its app. Beside them, the Bluetooth button: Bluetooth's settings, or turning it on if it's off.
+ * its app. Beside them, the Bluetooth button: the system's pop-up for where sound plays, or turning
+ * Bluetooth on if it's off.
  */
 @Composable
 fun SpeakersPanel() {
@@ -174,7 +201,7 @@ fun SpeakersPanel() {
         note = null
         val permission = Speakers.permission
         when {
-            Speakers.isOn(context) -> Speakers.openBluetooth(context)
+            Speakers.isOn(context) -> Speakers.openOutputs(context)
             permission != null && !Speakers.allowed(context) -> ask.launch(permission)
             else -> turnOn()
         }
