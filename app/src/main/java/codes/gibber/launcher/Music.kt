@@ -4,22 +4,25 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
+import android.net.Uri
+import android.os.Build
 import android.os.SystemClock
 import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.util.LruCache
 import android.view.KeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -29,19 +32,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -62,7 +62,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import java.util.Collections
 
 /**
  * Lets the launcher see what's playing, and how many notifications each app has, once you turn it
@@ -96,24 +99,63 @@ object NowPlaying {
         val artist: String,
         val player: String,
         val art: Bitmap?,
+        /** Where the cover is when the player sends a link to it instead of the picture. */
+        val artUri: String?,
         val playing: Boolean,
         val position: Long,
         val duration: Long,
     )
 
+    private const val SPOTIFY = "com.spotify.music"
+
+    private fun listener(context: Context) = ComponentName(context, MediaListener::class.java)
+
     fun allowed(context: Context): Boolean =
         NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
 
+    /** Set once the access screen has been opened, so the music screen can say what to do if it's still off. */
+    var asked by mutableStateOf(false)
+
+    /** Opens the launcher's own notification access switch (Android 11+), else the list of apps. */
     fun openAccess(context: Context) {
+        asked = true
+        if (Build.VERSION.SDK_INT >= 30) {
+            try {
+                context.startActivity(
+                    Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
+                        .putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, listener(context).flattenToString())
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+                return
+            } catch (e: Exception) { }
+        }
         try {
             context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } catch (e: Exception) { }
     }
 
+    /** The launcher's App info, where Android 13+ keeps "Allow restricted settings" in the ⋮ menu. */
+    fun openAppInfo(context: Context) {
+        try {
+            context.startActivity(
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        } catch (e: Exception) { }
+    }
+
+    /** Asks Android to connect the listener now that access is on, so sessions read without a restart. */
+    fun rebind(context: Context) {
+        try { NotificationListenerService.requestRebind(listener(context)) } catch (e: Exception) { }
+    }
+
+    private fun live(c: MediaController) = c.playbackState?.state.let {
+        it == PlaybackState.STATE_PLAYING || it == PlaybackState.STATE_BUFFERING
+    }
+
     private fun controller(context: Context): MediaController? = try {
-        val all = context.getSystemService(MediaSessionManager::class.java)
-            .getActiveSessions(ComponentName(context, MediaListener::class.java))
-        all.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING } ?: all.firstOrNull()
+        val all = context.getSystemService(MediaSessionManager::class.java).getActiveSessions(listener(context))
+        all.firstOrNull { live(it) } ?: all.firstOrNull { it.packageName == SPOTIFY } ?: all.firstOrNull()
     } catch (e: Exception) {
         null
     }
@@ -129,15 +171,50 @@ object NowPlaying {
             val since = SystemClock.elapsedRealtime() - state.lastPositionUpdateTime
             state.position + if (state.state == PlaybackState.STATE_PLAYING) (since * state.playbackSpeed).toLong() else 0L
         }
+        fun text(vararg keys: String) = keys.firstNotNullOfOrNull { k -> m?.getString(k)?.ifBlank { null } }.orEmpty()
+        fun bitmap(vararg keys: String) = keys.firstNotNullOfOrNull { k -> try { m?.getBitmap(k) } catch (e: Exception) { null } }
         return Track(
-            title = m?.getString(MediaMetadata.METADATA_KEY_TITLE).orEmpty(),
-            artist = m?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: m?.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST).orEmpty(),
+            title = text(MediaMetadata.METADATA_KEY_TITLE, MediaMetadata.METADATA_KEY_DISPLAY_TITLE),
+            artist = text(MediaMetadata.METADATA_KEY_ARTIST, MediaMetadata.METADATA_KEY_ALBUM_ARTIST, MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE),
             player = player,
-            art = m?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART) ?: m?.getBitmap(MediaMetadata.METADATA_KEY_ART),
-            playing = state?.state == PlaybackState.STATE_PLAYING,
+            art = bitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, MediaMetadata.METADATA_KEY_ART, MediaMetadata.METADATA_KEY_DISPLAY_ICON),
+            artUri = text(MediaMetadata.METADATA_KEY_ALBUM_ART_URI, MediaMetadata.METADATA_KEY_ART_URI, MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI).ifBlank { null },
+            playing = live(c),
             position = position,
             duration = m?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L,
         )
+    }
+
+    private val covers = LruCache<String, Bitmap>(6)
+    private val noCover: MutableSet<String> = Collections.synchronizedSet(HashSet())
+
+    /** The cover at a link, loaded off the main thread once and kept; null when it can't be read. */
+    suspend fun cover(context: Context, uri: String): Bitmap? {
+        covers.get(uri)?.let { return it }
+        if (uri in noCover) return null
+        val bitmap = withContext(Dispatchers.IO) { try { loadCover(context, uri) } catch (e: Throwable) { null } }
+        if (bitmap != null) covers.put(uri, bitmap) else {
+            if (noCover.size > 50) noCover.clear()
+            noCover.add(uri)
+        }
+        return bitmap
+    }
+
+    private fun loadCover(context: Context, uri: String): Bitmap? {
+        val u = Uri.parse(uri)
+        val bytes = when (u.scheme?.lowercase()) {
+            "http", "https" -> java.net.URL(uri).openConnection().run {
+                connectTimeout = 5_000
+                readTimeout = 5_000
+                getInputStream().use { it.readBytes() }
+            }
+            else -> context.contentResolver.openInputStream(u)?.use { it.readBytes() }
+        } ?: return null
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        var sample = 1
+        while (bounds.outWidth / (sample * 2) >= 512 && bounds.outHeight / (sample * 2) >= 512) sample *= 2
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
     }
 
     /** Play or pause, skip ahead or back: on the playing app, or the last one when none is open. */
@@ -168,17 +245,34 @@ object NowPlaying {
     }
 }
 
-/** Reads what's playing every second while it's on screen. */
+/** Reads what's playing every second while it's on screen, with its cover loaded from a link if it came as one. */
 @Composable
 fun rememberTrack(): NowPlaying.Track? {
     val context = LocalContext.current
     val track by produceState<NowPlaying.Track?>(null) {
         while (true) {
-            value = NowPlaying.read(context)
+            val t = NowPlaying.read(context)
+            value = if (t != null && t.art == null && t.artUri != null) t.copy(art = NowPlaying.cover(context, t.artUri)) else t
             delay(1_000)
         }
     }
     return track
+}
+
+/**
+ * Whether notification access is on, read every second: it changes in Android's settings while
+ * the launcher waits behind them, and nothing else tells the screen.
+ */
+@Composable
+fun rememberAccess(): Boolean {
+    val context = LocalContext.current
+    val allowed by produceState(NowPlaying.allowed(context)) {
+        while (true) {
+            value = NowPlaying.allowed(context)
+            delay(1_000)
+        }
+    }
+    return allowed
 }
 
 /** The album art, or the design's blue-to-red square while there is none. */
@@ -200,6 +294,7 @@ fun Cover(art: Bitmap?, size: Dp) {
 fun MusicCard(onOpen: () -> Unit) {
     val context = LocalContext.current
     val track = rememberTrack()
+    val allowed = rememberAccess()
     val speaker = remember(track?.title) { NowPlaying.speaker(context) }
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -221,7 +316,7 @@ fun MusicCard(onOpen: () -> Unit) {
                 overflow = TextOverflow.Ellipsis,
             )
             val sub = when {
-                track == null && !NowPlaying.allowed(context) -> "Tap to see what's playing"
+                track == null && !allowed -> "Tap to see what's playing"
                 track == null -> "Nothing playing"
                 else -> listOfNotNull(track.artist.ifBlank { null }, speaker?.let { "on your $it" } ?: track.player).joinToString(" · ")
             }
@@ -248,19 +343,22 @@ fun TapGlyph(g: Glyphs, size: Dp, color: Color = Color.White, onTap: () -> Unit)
 }
 
 /**
- * The music screen: the song, its controls, the speaker it plays on with its volume, your JBL
- * speaker and headphones, and the bass boost. Swipe down or press Back to close it.
+ * The music screen: the song and its controls, your JBL speaker and headphones with which one is
+ * connected, and the bass boost. Swipe down or press Back to close it.
  */
 @Composable
 fun PlayerScreen(onClose: () -> Unit) {
     BackHandler(enabled = true) { onClose() }
     val context = LocalContext.current
     val track = rememberTrack()
-    val audio = remember { context.getSystemService(AudioManager::class.java) }
-    val maxVolume = remember { audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
-    var volume by remember { mutableFloatStateOf(audio.getStreamVolume(AudioManager.STREAM_MUSIC) / maxVolume.toFloat()) }
-    val speaker = remember(track?.title) { NowPlaying.speaker(context) }
+    val allowed = rememberAccess()
     var pulled by remember { mutableStateOf(0f) }
+    // When access is switched on while this screen waits, connect the listener straight away.
+    var wasOff by remember { mutableStateOf(!allowed) }
+    LaunchedEffect(allowed) {
+        if (allowed && wasOff) NowPlaying.rebind(context)
+        wasOff = !allowed
+    }
 
     Box(
         Modifier
@@ -324,54 +422,28 @@ fun PlayerScreen(onClose: () -> Unit) {
                 }
             }
 
-            if (!NowPlaying.allowed(context)) {
-                FrostButton("Let the launcher see what's playing", Modifier.fillMaxWidth(), height = 44.dp) { NowPlaying.openAccess(context) }
+            if (!allowed) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FrostButton("Let the launcher see what's playing", Modifier.fillMaxWidth(), height = 44.dp) { NowPlaying.openAccess(context) }
+                    // Android 13+ greys the switch out for apps not installed from a store ("Restricted setting").
+                    if (NowPlaying.asked && Build.VERSION.SDK_INT >= 33) {
+                        Text(
+                            "Still off? If the switch was greyed out, open App info, tap ⋮ at the top, then Allow restricted settings, and try again.",
+                            color = Dark.W62,
+                            fontSize = 12.sp,
+                        )
+                        FrostButton("Open App info", Modifier.fillMaxWidth(), hi = true, height = 38.dp) { NowPlaying.openAppInfo(context) }
+                    }
+                }
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Head("Playing on")
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.size(40.dp).clip(RoundedCornerShape(11.dp)).background(Color(0xFFFF5A00)),
-                    ) { Glyph(Glyphs.Speaker, 20.dp, Color.White) }
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(speaker ?: "This phone", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-                        Text("Volume", color = Dark.W62, fontSize = 12.sp)
-                    }
-                }
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(24.dp)
-                        .pointerInput(Unit) {
-                            fun set(x: Float) {
-                                volume = (x / size.width).coerceIn(0f, 1f)
-                                audio.setStreamVolume(AudioManager.STREAM_MUSIC, (volume * maxVolume).toInt(), 0)
-                            }
-                            detectTapGestures { set(it.x) }
-                        }
-                        .pointerInput(Unit) {
-                            detectHorizontalDragGestures { change, _ ->
-                                volume = (change.position.x / size.width).coerceIn(0f, 1f)
-                                audio.setStreamVolume(AudioManager.STREAM_MUSIC, (volume * maxVolume).toInt(), 0)
-                            }
-                        },
-                    contentAlignment = Alignment.CenterStart,
-                ) { Bar(volume, Modifier.fillMaxWidth()) }
                 SpeakersPanel()
             }
 
             BassPanel()
             Gap(24.dp)
-        }
-    }
-
-    // The volume can change from the phone's buttons too.
-    LaunchedEffect(Unit) {
-        while (true) {
-            volume = audio.getStreamVolume(AudioManager.STREAM_MUSIC) / maxVolume.toFloat()
-            delay(1_500)
         }
     }
 }

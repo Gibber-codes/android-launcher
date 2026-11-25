@@ -3,9 +3,7 @@ package codes.gibber.launcher
 import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
-import android.bluetooth.BluetoothProfile
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -21,10 +19,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,7 +33,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,31 +44,25 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withTimeoutOrNull
-import kotlin.coroutines.resume
 
 /**
- * One of your Bluetooth things: found among the phone's paired devices by a word in its name,
- * opened in its maker's app once it's connected.
+ * One of your Bluetooth things: known by any of its names (its own, or the one you gave it, like
+ * "Gabes JBL"), opened in its maker's app.
  */
 data class Gear(
     val name: String,
     val short: String,
-    val key: String,
+    val keys: List<String>,
     val glyph: Glyphs,
     val app: String,
-    val profiles: List<Int>,
-)
+) {
+    fun matches(label: String?): Boolean = label != null && keys.any { label.contains(it, ignoreCase = true) }
+}
 
-/** Your JBL speaker and headphones: whether each is connected, connecting it, opening its app. */
+/** Your JBL speaker and headphones: which one is connected, and opening its app. */
 object Speakers {
-    val XTREME = Gear("JBL Xtreme 5", "Xtreme 5", "xtreme", Glyphs.Speaker, "JBL One", listOf(BluetoothProfile.A2DP))
-    val ENDURANCE = Gear(
-        "JBL Endurance", "Endurance", "endurance", Glyphs.Headphones, "JBL Headphones",
-        listOf(BluetoothProfile.HEADSET, BluetoothProfile.A2DP),
-    )
+    val XTREME = Gear("JBL Xtreme 5", "Xtreme 5", listOf("Gabes JBL", "Xtreme"), Glyphs.Speaker, "JBL One")
+    val ENDURANCE = Gear("JBL Endurance", "Endurance", listOf("Endurance"), Glyphs.Headphones, "JBL Headphones")
     val ALL = listOf(XTREME, ENDURANCE)
 
     private val BT_OUTPUTS = setOf(
@@ -89,57 +83,38 @@ object Speakers {
 
     fun isOn(context: Context): Boolean = try { adapter(context)?.isEnabled == true } catch (_: Throwable) { false }
 
+    /** The addresses of paired devices known by one of the gear's names, when Android lets the launcher see them. */
     @SuppressLint("MissingPermission")
-    fun paired(context: Context, gear: Gear): BluetoothDevice? = try {
-        adapter(context)?.bondedDevices?.firstOrNull { it.name?.contains(gear.key, ignoreCase = true) == true }
-    } catch (_: Throwable) {
-        null
-    }
-
-    /** Connected when the phone can send it sound: read from the phone's outputs, which needs no permission. */
-    fun connected(context: Context, gear: Gear): Boolean = try {
-        context.getSystemService(AudioManager::class.java)
-            .getDevices(AudioManager.GET_DEVICES_OUTPUTS)
-            .any { it.type in BT_OUTPUTS && it.productName?.toString()?.contains(gear.key, ignoreCase = true) == true }
-    } catch (_: Throwable) {
-        false
+    private fun pairedAddresses(context: Context, gear: Gear): Set<String> {
+        if (!allowed(context)) return emptySet()
+        return try {
+            adapter(context)?.bondedDevices.orEmpty()
+                .filter { d -> gear.matches(d.name) || (Build.VERSION.SDK_INT >= 30 && gear.matches(d.alias)) }
+                .mapNotNull { it.address?.uppercase()?.ifBlank { null } }
+                .toSet()
+        } catch (_: Throwable) {
+            emptySet()
+        }
     }
 
     /**
-     * Asks Android to connect a paired device. Apps have no public way to do this; the hidden
-     * connect call works on some phones and is refused on newer ones, so this says only whether
-     * Android took the request. The caller watches for the connection and falls back to the
-     * Bluetooth screen.
+     * Which of your things the phone can send sound to now: an output named like one, or (Android 9+,
+     * with Nearby devices allowed) at the address of a paired one named like it.
      */
-    @SuppressLint("MissingPermission")
-    suspend fun connect(context: Context, device: BluetoothDevice, gear: Gear): Boolean {
-        val adapter = adapter(context) ?: return false
-        var taken = false
-        for (profile in gear.profiles) {
-            val proxy = withTimeoutOrNull(3_000) { proxy(context, adapter, profile) } ?: continue
-            try {
-                val call = proxy.javaClass.getMethod("connect", BluetoothDevice::class.java)
-                if (call.invoke(proxy, device) == true) taken = true
-            } catch (_: Throwable) {
-            } finally {
-                try { adapter.closeProfileProxy(profile, proxy) } catch (_: Throwable) { }
+    fun connected(context: Context): Set<Gear> = try {
+        val outputs = context.getSystemService(AudioManager::class.java)
+            .getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+            .filter { it.type in BT_OUTPUTS }
+        ALL.filter { gear ->
+            val addresses = if (Build.VERSION.SDK_INT >= 28) pairedAddresses(context, gear) else emptySet()
+            outputs.any { out ->
+                gear.matches(out.productName?.toString()) ||
+                    (Build.VERSION.SDK_INT >= 28 && addresses.isNotEmpty() && out.address.uppercase() in addresses)
             }
-        }
-        return taken
+        }.toSet()
+    } catch (_: Throwable) {
+        emptySet()
     }
-
-    private suspend fun proxy(context: Context, adapter: BluetoothAdapter, profile: Int): BluetoothProfile? =
-        suspendCancellableCoroutine { cont ->
-            val asked = try {
-                adapter.getProfileProxy(context.applicationContext, object : BluetoothProfile.ServiceListener {
-                    override fun onServiceConnected(p: Int, proxy: BluetoothProfile) { if (cont.isActive) cont.resume(proxy) }
-                    override fun onServiceDisconnected(p: Int) {}
-                }, profile)
-            } catch (_: Throwable) {
-                false
-            }
-            if (!asked && cont.isActive) cont.resume(null)
-        }
 
     fun openBluetooth(context: Context) {
         try {
@@ -167,112 +142,73 @@ object Speakers {
 }
 
 /**
- * Your speaker and headphones under Playing on. A tap connects one (turning Bluetooth on first,
- * if it's off); a tap once it's connected opens its app. Below, a button for each app.
+ * Your speaker and headphones under Playing on, each saying whether it's connected; a tap opens
+ * its app. Beside them, the Bluetooth button: Bluetooth's settings, or turning it on if it's off.
  */
 @Composable
 fun SpeakersPanel() {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var connected by remember { mutableStateOf(Speakers.ALL.filter { Speakers.connected(context, it) }.toSet()) }
-    var busy by remember { mutableStateOf<Gear?>(null) }
+    var connected by remember { mutableStateOf(Speakers.connected(context)) }
+    var on by remember { mutableStateOf(Speakers.isOn(context)) }
     var note by remember { mutableStateOf<String?>(null) }
-    // A tap waiting on Android's "allow" or "turn on Bluetooth", and the one to carry on with.
-    var waiting by remember { mutableStateOf<Gear?>(null) }
-    var resume by remember { mutableStateOf<Gear?>(null) }
 
-    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        val g = waiting
-        waiting = null
-        if (ok) resume = g else note = "The launcher needs Nearby devices to connect your speaker."
+    val enable = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        on = Speakers.isOn(context)
+        note = if (on) null else "Bluetooth is still off."
     }
-    val turnOn = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        val g = waiting
-        waiting = null
-        if (Speakers.isOn(context)) resume = g else note = "Bluetooth is still off."
-    }
-
-    fun tap(gear: Gear) {
-        if (busy != null) return
-        if (Speakers.connected(context, gear)) {
-            note = Speakers.openApp(context, gear)
-            return
-        }
-        val permission = Speakers.permission
-        if (permission != null && !Speakers.allowed(context)) {
-            waiting = gear
-            ask.launch(permission)
-            return
-        }
-        if (!Speakers.isOn(context)) {
-            waiting = gear
-            note = "Turning Bluetooth on to connect your ${gear.name}."
-            try {
-                turnOn.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
-            } catch (_: Throwable) {
-                waiting = null
-                note = "Android wouldn't turn Bluetooth on from here, so the Bluetooth screen opened."
-                Speakers.openBluetooth(context)
-            }
-            return
-        }
-        val device = Speakers.paired(context, gear)
-        if (device == null) {
-            note = "Your ${gear.name} isn't paired with this phone, so the Bluetooth screen opened: pair it there."
+    fun turnOn() {
+        try {
+            enable.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+        } catch (_: Throwable) {
+            note = "Android wouldn't turn Bluetooth on from here, so the Bluetooth screen opened."
             Speakers.openBluetooth(context)
-            return
         }
-        busy = gear
-        note = "Connecting your ${gear.name}…"
-        scope.launch {
-            val taken = Speakers.connect(context, device, gear)
-            val made = taken && withTimeoutOrNull(12_000) {
-                while (!Speakers.connected(context, gear)) delay(500)
-                true
-            } == true
-            busy = null
-            if (made) {
-                connected = connected + gear
-                note = null
-            } else {
-                note = "Android didn't let the launcher connect your ${gear.name}, so the Bluetooth screen opened: tap it there."
-                Speakers.openBluetooth(context)
-            }
+    }
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok) turnOn() else {
+            note = "Turning Bluetooth on from here needs Nearby devices, so the Bluetooth screen opened."
+            Speakers.openBluetooth(context)
+        }
+    }
+    fun tapBluetooth() {
+        note = null
+        val permission = Speakers.permission
+        when {
+            Speakers.isOn(context) -> Speakers.openBluetooth(context)
+            permission != null && !Speakers.allowed(context) -> ask.launch(permission)
+            else -> turnOn()
         }
     }
 
-    LaunchedEffect(resume) {
-        val g = resume ?: return@LaunchedEffect
-        resume = null
-        tap(g)
-    }
-    // Connections change from elsewhere too: the speaker's button, Android's own Bluetooth screen.
+    // Connections change from elsewhere: the speaker's own button, Android's Bluetooth screen.
     LaunchedEffect(Unit) {
         while (true) {
-            connected = Speakers.ALL.filter { Speakers.connected(context, it) }.toSet()
+            connected = Speakers.connected(context)
+            on = Speakers.isOn(context)
             delay(1_500)
         }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.height(IntrinsicSize.Min)) {
             Speakers.ALL.forEach { gear ->
-                GearTile(gear, gear in connected, busy == gear, Modifier.weight(1f)) { tap(gear) }
+                GearTile(gear, gear in connected, Modifier.weight(1f).fillMaxHeight()) { note = Speakers.openApp(context, gear) }
             }
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .width(56.dp)
+                    .fillMaxHeight()
+                    .frost(hi = on)
+                    .clickable { tapBluetooth() },
+            ) { Glyph(Glyphs.Bluetooth, 22.dp, if (on) Color.White else Dark.W62) }
         }
         note?.let { Text(it, color = Dark.W62, fontSize = 11.sp) }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Speakers.ALL.forEach { gear ->
-                FrostButton("Open ${gear.app}", Modifier.weight(1f), hi = true, height = 38.dp) {
-                    note = Speakers.openApp(context, gear)
-                }
-            }
-        }
     }
 }
 
 @Composable
-private fun GearTile(gear: Gear, connected: Boolean, busy: Boolean, modifier: Modifier, onTap: () -> Unit) {
+private fun GearTile(gear: Gear, connected: Boolean, modifier: Modifier, onTap: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -293,11 +229,7 @@ private fun GearTile(gear: Gear, connected: Boolean, busy: Boolean, modifier: Mo
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 if (connected) Dot(Dark.Green, 6.dp)
                 Text(
-                    when {
-                        busy -> "Connecting…"
-                        connected -> "Connected"
-                        else -> "Tap to connect"
-                    },
+                    if (connected) "Connected" else "Not connected",
                     color = if (connected) Color.White else Dark.W62,
                     fontSize = 11.sp,
                     maxLines = 1,

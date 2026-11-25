@@ -19,7 +19,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /** The design's line icons, drawn on a 24-unit square like its SVGs. */
-enum class Glyphs { Back, Forward, Down, Search, Gear, Play, Pause, Prev, Next, Mic, Bulb, Speaker, Headphones, Check, Plus, Code, Swatch, Move, Merge, Remove, Trash }
+enum class Glyphs { Back, Forward, Down, Search, Gear, Play, Pause, Prev, Next, Mic, Bulb, Speaker, Headphones, Bluetooth, Check, Plus, Code, Swatch, Move, Merge, Remove, Trash }
 
 @Composable
 fun Glyph(g: Glyphs, size: Dp, color: Color, modifier: Modifier = Modifier) {
@@ -99,6 +99,8 @@ fun DrawScope.drawGlyph(g: Glyphs, color: Color) {
             drawRoundRect(color, Offset(3 * u, 12 * u), Size(5 * u, 8 * u), androidx.compose.ui.geometry.CornerRadius(1.5f * u), style = line)
             drawRoundRect(color, Offset(16 * u, 12 * u), Size(5 * u, 8 * u), androidx.compose.ui.geometry.CornerRadius(1.5f * u), style = line)
         }
+        // The Bluetooth rune: a spine with two arrowheads to its right, crossed at the left.
+        Glyphs.Bluetooth -> stroke(p(7f, 7.5f, 17f, 16.5f, 12f, 21f, 12f, 3f, 17f, 7.5f, 7f, 16.5f))
         Glyphs.Check -> stroke(p(5f, 12.5f, 10f, 17f, 19f, 7f))
         Glyphs.Plus -> { stroke(p(12f, 5f, 12f, 19f)); stroke(p(5f, 12f, 19f, 12f)) }
         Glyphs.Code -> { stroke(p(9f, 7f, 4f, 12f, 9f, 17f)); stroke(p(15f, 7f, 20f, 12f, 15f, 17f)) }
