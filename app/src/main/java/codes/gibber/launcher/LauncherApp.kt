@@ -172,7 +172,8 @@ fun LauncherApp(
             }
         }
 
-        // Pressing Home always brings you back to the Home page, with nothing open over it.
+        // Pressing Home on the launcher brings you to the Home page, with nothing open over it. From
+        // another app it only brings the launcher back as you left it (MainActivity doesn't count that press).
         LaunchedEffect(homePresses) {
             if (homePresses > 0) {
                 drawerOpen = false
@@ -185,9 +186,6 @@ fun LauncherApp(
                 pager.animateScrollToPage(HOME)
             }
         }
-        // Coming back from an app closes the drawer.
-        LaunchedEffect(resumes) { drawerOpen = false }
-
         // A Music group holding Spotify and the JBL app, made once both are installed.
         LaunchedEffect(apps) {
             if (prefs.musicMade) return@LaunchedEffect

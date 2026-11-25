@@ -18,6 +18,12 @@ class MainActivity : ComponentActivity() {
     /** Bumps each time Home is pressed while the launcher is already open. */
     private val homePresses = mutableIntStateOf(0)
 
+    /**
+     * True from leaving the launcher until it is in front again. Home pressed in another app then only
+     * brings the launcher back as you left it. Cleared in onResume, which comes after the Home intent.
+     */
+    private var away = false
+
     /** Bumps on every resume so the app list picks up installs and removals. */
     private val resumes = mutableIntStateOf(0)
 
@@ -63,6 +69,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        away = true
         try { Widgets.host(this).stopListening() } catch (e: Exception) { }
         // You've gone to another app, so the update can install without closing what you're looking at.
         val apk = readyApk
@@ -82,6 +89,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        away = false
         apps.value = Apps.load(this)
         resumes.intValue++
         checkForUpdate()
@@ -135,7 +143,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        if (intent.hasCategory(Intent.CATEGORY_HOME)) homePresses.intValue++
+        // From another app, Home returns to the launcher page you left; on the launcher, it goes Home.
+        if (intent.hasCategory(Intent.CATEGORY_HOME) && !away) homePresses.intValue++
         if (intent.action == UpdateNotice.ACTION) startUpdate()
     }
 }
