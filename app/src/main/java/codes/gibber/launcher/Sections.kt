@@ -2,7 +2,7 @@ package codes.gibber.launcher
 
 import android.content.pm.ApplicationInfo
 
-/** A page you swipe to, holding its own sections. Workspaces draw on black; Home shows your wallpaper. */
+/** A page you swipe to, holding its own sections. */
 data class LauncherPage(val name: String, val sections: List<String>, val workspace: Boolean)
 
 /** The pages and their sections, in order. Hidden apps stay in the app list only. */
@@ -10,17 +10,35 @@ object Sections {
     const val HIDDEN = "Hidden"
 
     val PAGES = listOf(
-        // Home keeps to three sections; every other app waits in the swipe-up list
+        // Home holds eight apps; every other app waits in Search and the swipe-up list
         // (Social, Play, Maps, Work, Tools and Other are guesses that don't show on a page).
-        LauncherPage("Home", listOf("Contact", "Money", "Media"), workspace = false),
+        LauncherPage("Home", listOf("Apps"), workspace = false),
         LauncherPage("Dev", listOf("My games", "Dev tools"), workspace = true),
         LauncherPage("Mechanic", listOf("Jobs", "Parts", "Mechanic tools"), workspace = true),
     )
 
     val ALL = PAGES.flatMap { it.sections }
 
-    /** Names used before, kept so apps you already moved stay put. */
-    private val RENAMED = mapOf("Wallet" to "Money", "Games" to "Play", "Dev" to "Dev tools", "Code" to "Dev tools", "AI" to "Dev tools")
+    /**
+     * Names used before, kept so apps you already moved stay put. Home's old Contact, Money and
+     * Media sections became its one Apps section, so what you put on Home stays there.
+     */
+    private val RENAMED = mapOf(
+        "Wallet" to "Apps", "Money" to "Apps", "Contact" to "Apps", "Media" to "Apps",
+        "Games" to "Play", "Dev" to "Dev tools", "Code" to "Dev tools", "AI" to "Dev tools",
+    )
+
+    /** Home's eight, as the design has them: Messages, Contacts, Brave, Photos, YouTube, Camera, Gallery and Maps. */
+    private val HOME = listOf(
+        "com.samsung.android.messaging", "com.google.android.apps.messaging",
+        "com.samsung.android.app.contacts", "com.google.android.contacts",
+        "com.brave.browser",
+        "com.google.android.apps.photos",
+        "com.google.android.youtube",
+        "com.sec.android.app.camera", "com.google.android.GoogleCamera",
+        "com.sec.android.gallery3d",
+        "com.google.android.apps.maps",
+    )
 
     private val KNOWN = mapOf(
         "Money" to listOf(
@@ -87,8 +105,10 @@ object Sections {
         // A game's live app waits in the app list; its menu icon sits on the Dev page.
         if (HubGames.isLive(app)) return "Play"
         if (HubGames.isGame(app)) return if (HubGames.idOf(app) in hubProjects) "Dev tools" else "My games"
+        if (HubLink.isIdeas(app)) return "Other"
         if (HubLink.isSettings(app)) return "Dev tools"
         if (HubLink.isOwn(app)) return "Dev tools"
+        if (app.packageName in HOME) return "Apps"
         // Claude Duet and other Claude apps, by name, since their package names vary.
         if (app.label.contains("Claude", ignoreCase = true) || app.label.contains("Gemini", ignoreCase = true)) return "Dev tools"
         if (app.label.contains("JBL", ignoreCase = true)) return "Media"

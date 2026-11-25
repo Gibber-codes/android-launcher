@@ -42,14 +42,16 @@ fun UpdateButton(resumes: Int, modifier: Modifier = Modifier) {
     val label = busy ?: if (ready) "Update ready" else "Update"
     Text(
         label,
-        color = if (ready) Color(0xFF8AB4FF) else Color.White,
-        fontSize = 18.sp,
+        color = Color.White,
+        fontSize = 13.sp,
+        fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
         modifier = modifier
+            .frost(hi = true)
             .clickable(enabled = busy == null) {
                 scope.launch {
                     Updater.install(context, busy = { busy = it }, say = ::say)
                 }
             }
-            .padding(vertical = 12.dp),
+            .padding(horizontal = 14.dp, vertical = 9.dp),
     )
 }

@@ -144,6 +144,19 @@ class HubApi(hubUrl: String) {
         }
     }
 
+    /**
+     * The Idea column of your board, newest first: `/api/ideas` answering `{ ideas: [{ key, title, kind }] }`
+     * or the list alone. Null when the hub can't be reached or doesn't send ideas yet.
+     */
+    suspend fun ideas(): List<Idea>? {
+        val any = json("/api/ideas")
+        val arr = (any as? JSONObject)?.optJSONArray("ideas") ?: any as? JSONArray ?: return null
+        return (0 until arr.length()).mapNotNull { i ->
+            arr.optJSONObject(i)?.let { Idea(it.optString("key"), it.optString("title"), it.optString("kind")) }
+                ?.takeIf { it.title.isNotBlank() }
+        }
+    }
+
     /** Starts or stops a workspace. Null when it worked, or what the hub said went wrong. */
     suspend fun press(what: String, id: String): String? {
         val a = call("/api/workspaces/$what", JSONObject().put("id", id)) ?: return "Couldn't reach your PC."

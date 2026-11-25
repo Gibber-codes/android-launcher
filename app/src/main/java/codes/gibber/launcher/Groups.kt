@@ -81,86 +81,52 @@ object Groups {
     }
 }
 
-/** A group, like Music: the design's folder, a count of its apps, and its name. */
+/** A group, like Music: a frosted tile with the design's folder, how many apps it holds, and its name. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun GroupCell(
     cell: Cell.Many,
-    modifier: Modifier,
-    slim: Boolean,
     onOpen: () -> Unit,
     onHold: () -> Unit,
     actions: List<RowAction>,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
-    val press = Modifier
-        .clip(RoundedCornerShape(12.dp))
-        .combinedClickable(onClick = onOpen, onLongClick = { onHold(); menuOpen = true })
-    val shadow = androidx.compose.ui.text.TextStyle(
-        shadow = androidx.compose.ui.graphics.Shadow(
-            color = Color.Black.copy(alpha = 0.6f),
-            offset = androidx.compose.ui.geometry.Offset(0f, 1f),
-            blurRadius = 4f,
-        ),
-    )
-    Box(modifier) {
-        if (slim) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp).then(press),
-            ) {
-                FolderWithCount(cell.apps.size, 26.dp)
-                Spacer(Modifier.width(12.dp))
-                Text(
-                    cell.group.name,
-                    color = Look.Cream,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Medium,
-                    style = shadow,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        } else {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.fillMaxWidth().then(press).padding(vertical = 6.dp),
-            ) {
-                Box(Modifier.heightIn(min = 32.dp), contentAlignment = Alignment.Center) { FolderWithCount(cell.apps.size, 30.dp) }
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    cell.group.name,
-                    color = Look.Cream,
-                    fontSize = 13.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
-                )
-            }
-        }
-        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-            actions.forEach { action ->
-                DropdownMenuItem(text = { Text(action.label) }, onClick = { menuOpen = false; action.onClick() })
-            }
-        }
-    }
-}
-
-@Composable
-private fun FolderWithCount(count: Int, size: androidx.compose.ui.unit.Dp) {
     Box {
-        FolderGlyph(size)
-        Box(
-            contentAlignment = Alignment.Center,
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(7.dp),
             modifier = Modifier
-                .align(Alignment.TopEnd)
-                .offset(x = 7.dp, y = (-6).dp)
-                .size(15.dp)
-                .clip(androidx.compose.foundation.shape.CircleShape)
-                .background(Look.Lilac),
+                .fillMaxWidth()
+                .combinedClickable(onClick = onOpen, onLongClick = { onHold(); menuOpen = true }),
         ) {
-            Text("$count", color = Look.Page, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            Box {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.size(52.dp).clip(TileShape).frost(hi = true),
+                ) { FolderGlyph(26.dp) }
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 5.dp, y = (-5).dp)
+                        .size(18.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(Color.White),
+                ) {
+                    Text("${cell.apps.size}", color = Color(0xFF111111), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+            Text(
+                cell.group.name,
+                color = Color.White,
+                fontSize = 12.sp,
+                style = Dark.UnderIcon,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+            )
         }
+        HoldMenu(menuOpen, actions) { menuOpen = false }
     }
 }
 
@@ -175,13 +141,13 @@ fun GroupDialog(cell: Cell.Many, onTakeOut: (AppEntry) -> Unit, onDismiss: () ->
             modifier = Modifier
                 .width(230.dp)
                 .clip(RoundedCornerShape(16.dp))
-                .background(Look.Folder)
-                .border(1.dp, Look.Line, RoundedCornerShape(16.dp))
+                .background(Dark.Pane)
+                .border(1.dp, Dark.Rule, RoundedCornerShape(16.dp))
                 .padding(14.dp),
         ) {
             Text(
                 cell.group.name.uppercase(),
-                color = Look.Sage,
+                color = Color.White,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium,
                 letterSpacing = 1.sp,
@@ -205,7 +171,7 @@ fun GroupDialog(cell: Cell.Many, onTakeOut: (AppEntry) -> Unit, onDismiss: () ->
                             ) {
                                 androidx.compose.runtime.key(app.key) { AppIcon(app, 28.dp, mono = true) }
                                 Spacer(Modifier.height(6.dp))
-                                Text(app.label, color = Look.Cream, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(app.label, color = Color.White, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                                 DropdownMenuItem(
@@ -218,7 +184,7 @@ fun GroupDialog(cell: Cell.Many, onTakeOut: (AppEntry) -> Unit, onDismiss: () ->
                     repeat(2 - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
-            Text("Hold an app to take it out, tap outside to close", color = Look.Muted, fontSize = 11.sp)
+            Text("Hold an app to take it out, tap outside to close", color = Dark.W62, fontSize = 11.sp)
         }
     }
 }

@@ -53,6 +53,7 @@ object Apps {
             .toList()
             .plus(Shortcuts.load(context))
             .plus(HubGames.entries(context))
+            .plus(HubLink.entries(context))
             .sortedBy { it.label.lowercase() }
     }
 
@@ -95,11 +96,16 @@ object Apps {
         null
     }
 
+    /** Set by the launcher: counts each launch, for Search's Used most. */
+    var onLaunch: (AppEntry) -> Unit = {}
+
     fun launch(context: Context, app: AppEntry) {
+        onLaunch(app)
         if (HubGames.isLive(app)) return HubGames.play(HubGames.idOf(app))
         if (HubGames.isGame(app)) return HubGames.open(HubGames.idOf(app))
         if (HubLink.isHub(app)) return HubLink.open()
         if (HubLink.isSettings(app)) return HubLink.openSettings()
+        if (HubLink.isIdeas(app)) return HubLink.openIdeas()
         if (Shortcuts.isShortcut(app)) return Shortcuts.launch(context, app)
         val intent = Intent(Intent.ACTION_MAIN)
             .addCategory(Intent.CATEGORY_LAUNCHER)

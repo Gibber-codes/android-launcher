@@ -12,6 +12,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -44,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -85,6 +88,7 @@ private fun hostOf(url: String): String = Uri.parse(url).host ?: url
  * the game and a switch for the dev server on your PC; under it, Dev build (while the server runs)
  * and Style; then Older versions, which opens to the versions you saved and the live address.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun GameMenu(
     id: String,
@@ -150,16 +154,16 @@ fun GameMenu(
     }
     val on = running || w?.state == "starting"
     val (status, statusColor) = when {
-        !devMode -> "" to Muted
-        api == null -> "Add your hub's address in Gibber Settings" to Muted
-        reached == null -> "Asking your PC…" to Muted
-        reached == false -> "Can't reach your PC" to Muted
-        w == null -> "Gibber Hub doesn't list this game" to Muted
-        busy -> "Working…" to Muted
-        running -> "Running on your PC" to Sage
-        w?.state == "starting" -> "Starting…" to Sage
+        !devMode -> "" to Dark.W62
+        api == null -> "Add your hub's address in Gibber Settings" to Dark.W62
+        reached == null -> "Asking your PC…" to Dark.W62
+        reached == false -> "Can't reach your PC" to Dark.W62
+        w == null -> "Gibber Hub doesn't list this game" to Dark.W62
+        busy -> "Working…" to Dark.W62
+        running -> "Running on your PC" to Dark.Green
+        w?.state == "starting" -> "Starting…" to Dark.Green
         w?.state == "other" -> "Something else has port ${w?.port}" to Color(0xFFE58FB3)
-        else -> "Off" to Muted
+        else -> "Off" to Dark.W62
     }
     val canSwitch = devMode && w != null && w.startable && !busy && w.state != "other"
 
@@ -182,67 +186,70 @@ fun GameMenu(
             ?: HubGames.tile(AppEntry(label = name, packageName = context.packageName, activityName = "hub-game:$id"), artPx)
     }
 
-    // The dimmed page behind; tapping it closes the card.
+    // The dimmed page behind; tapping it closes the pop-up.
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.6f))
+            .background(Color.Black.copy(alpha = 0.45f))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClose() }
     ) {
         Column(
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
             modifier = Modifier
                 .align(Alignment.Center)
                 .imePadding()
-                .fillMaxWidth(0.8f)
-                .widthIn(max = 340.dp)
-                .heightIn(max = 560.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(Card)
-                .border(1.dp, Line, RoundedCornerShape(16.dp))
-                // Taps inside the card stay in the card.
+                .width(300.dp)
+                .heightIn(max = 600.dp)
+                .shadow(30.dp)
+                .background(Dark.Pane)
+                // Taps inside the pop-up stay in it.
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
                 .verticalScroll(rememberScrollState())
-                .padding(12.dp),
+                .padding(16.dp),
         ) {
-            // Top line: the game, and the dev server's switch.
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Image(art.asImageBitmap(), contentDescription = null, modifier = Modifier.size(44.dp))
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(name, color = Cream, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                    if (devMode) {
-                        Text("Dev server", color = Cream, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                        Text(status, color = statusColor, fontSize = 11.sp, maxLines = 2)
-                    }
-                }
-                if (devMode) {
-                    Spacer(Modifier.width(8.dp))
-                    Switch(
-                        checked = on,
-                        onCheckedChange = { flip(it) },
-                        enabled = canSwitch,
-                        colors = SwitchDefaults.colors(
-                            checkedTrackColor = Lilac,
-                            checkedThumbColor = Ink,
-                            checkedBorderColor = Lilac,
-                            uncheckedTrackColor = PillBg,
-                            uncheckedThumbColor = Muted,
-                            uncheckedBorderColor = Line,
-                        ),
+                Image(art.asImageBitmap(), contentDescription = null, modifier = Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)))
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    Text(
+                        if (id in SIDEWAYS) "Opens sideways, full screen" else "Opens full screen",
+                        color = Dark.W62,
+                        fontSize = 12.sp,
                     )
                 }
             }
 
-            // Dev build (only while the dev server runs), Style, and Talk: this game's own Claude chat.
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (running && api != null && w != null) {
-                    val first = w.nav.firstOrNull { !it.name.contains("style", ignoreCase = true) }
-                    Pill("Dev build", Modifier.weight(1f), lead = { PlayMark() }) {
-                        onPlay(GamePage(api.pageOf(w, first?.path ?: "/"), id))
+            // Play: the newest version, or the dev build while only that is there.
+            FrostButton("Play", Modifier.fillMaxWidth(), hi = true, lead = Glyphs.Play, height = 42.dp) {
+                when {
+                    live.isNotBlank() -> onPlay(GamePage(live, id))
+                    running && api != null && w != null ->
+                        onPlay(GamePage(api.pageOf(w, w.nav.firstOrNull { !it.name.contains("style", ignoreCase = true) }?.path ?: "/"), id))
+                    else -> {
+                        olderOpen = true
+                        Toast.makeText(context, "Paste $name's live address under Older first.", Toast.LENGTH_LONG).show()
                     }
                 }
-                Pill("Style", Modifier.weight(1f), lead = { Dots() }) {
+            }
+
+            if (devMode) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Dev server", color = Color.White, fontSize = 14.sp)
+                        if (status.isNotBlank()) Text(status, color = statusColor, fontSize = 11.sp, maxLines = 2)
+                    }
+                    SquareSwitch(on = on, enabled = canSwitch) { flip(it) }
+                }
+            }
+
+            // Dev build (only while the dev server runs), Style, and Talk: this game's own Claude chat.
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (running && api != null && w != null) {
+                    val first = w.nav.firstOrNull { !it.name.contains("style", ignoreCase = true) }
+                    FrostButton("Dev build", lead = Glyphs.Code) { onPlay(GamePage(api.pageOf(w, first?.path ?: "/"), id)) }
+                }
+                FrostButton("Style", lead = Glyphs.Swatch) {
                     val style = w?.nav?.firstOrNull { it.name.contains("style", ignoreCase = true) }
                     if (running && api != null && w != null && style != null) onPlay(GamePage(api.pageOf(w, style.path), id))
                     else Toast.makeText(
@@ -251,29 +258,16 @@ fun GameMenu(
                         Toast.LENGTH_LONG,
                     ).show()
                 }
-                Pill(
-                    "Talk",
-                    Modifier.weight(1f),
-                    lead = { MicMark(16.dp) },
-                    onLongClick = { editingChat = true },
-                ) {
+                FrostButton("Talk", lead = Glyphs.Mic, onLongClick = { editingChat = true }) {
                     if (chatLink.isBlank()) editingChat = true else ClaudeChat.open(context, chatLink)
                 }
             }
 
-            // Older versions: one dropdown with the versions you saved and the live address.
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(34.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .border(1.dp, Line, RoundedCornerShape(10.dp))
-                    .clickable { olderOpen = !olderOpen }
-                    .padding(horizontal = 12.dp),
-            ) {
-                Text("Older versions", color = Cream, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                Text("⌄", color = Muted, fontSize = 14.sp, modifier = Modifier.rotate(if (olderOpen) 180f else 0f).offset(y = (-3).dp))
+            // Older: the first two versions you saved, and ••• for all of them and the live address.
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Older", color = Dark.W62, fontSize = 12.sp, modifier = Modifier.padding(end = 4.dp))
+                versions.take(2).forEach { (vName, vUrl) -> FrostButton(vName) { onPlay(GamePage(vUrl, id)) } }
+                FrostButton("•••", hi = olderOpen) { olderOpen = !olderOpen }
             }
             if (olderOpen) {
                 versions.forEachIndexed { i, (vName, vUrl) ->
@@ -291,7 +285,7 @@ fun GameMenu(
                 if (versions.isEmpty() && !adding) {
                     Text(
                         "None saved yet. On Netlify, open Deploys, pick an older deploy and copy its address.",
-                        color = Muted,
+                        color = Dark.W62,
                         fontSize = 11.sp,
                     )
                 }
@@ -315,7 +309,7 @@ fun GameMenu(
                     Pill("Add a version", Modifier.fillMaxWidth()) { adding = true }
                 }
 
-                // The newest version's address, which the game's own app plays.
+                // The newest version's address, which Play and the game's own app open.
                 if (live.isNotBlank() && !editingLive) {
                     LineRow(
                         title = "Newest version",
@@ -325,7 +319,7 @@ fun GameMenu(
                         onAction = { liveDraft = live; editingLive = true },
                     )
                 } else {
-                    Text("Newest version: paste your Netlify site's address.", color = Muted, fontSize = 11.sp)
+                    Text("Newest version: paste your Netlify site's address.", color = Dark.W62, fontSize = 11.sp)
                     Field(liveDraft, { liveDraft = it }, "your-site.netlify.app", uri = true)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Pill("Save", Modifier.weight(1f), strong = true) {
@@ -349,45 +343,8 @@ private fun Pill(
     label: String,
     modifier: Modifier = Modifier,
     strong: Boolean = false,
-    lead: (@Composable () -> Unit)? = null,
-    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
-) {
-    Row(
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier
-            .height(34.dp)
-            .clip(RoundedCornerShape(17.dp))
-            .background(if (strong) Lilac else PillBg)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(horizontal = 10.dp),
-    ) {
-        if (lead != null) {
-            lead()
-            Spacer(Modifier.width(6.dp))
-        }
-        Text(label, color = if (strong) Ink else Cream, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-    }
-}
-
-@Composable
-private fun PlayMark() = Text("▶", color = Cream, fontSize = 9.sp)
-
-@Composable
-private fun Dots() {
-    Row {
-        StyleDots.forEachIndexed { i, c ->
-            Box(
-                Modifier
-                    .offset(x = (-3 * i).dp)
-                    .size(9.dp)
-                    .clip(CircleShape)
-                    .background(c)
-            )
-        }
-    }
-}
+) = FrostButton(label, modifier, hi = strong, onClick = onClick)
 
 @Composable
 private fun LineRow(title: String, sub: String, action: String, onOpen: () -> Unit, onAction: () -> Unit) {
@@ -395,15 +352,14 @@ private fun LineRow(title: String, sub: String, action: String, onOpen: () -> Un
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
             .clickable(onClick = onOpen)
             .padding(vertical = 4.dp),
     ) {
         Column(Modifier.weight(1f)) {
-            Text(title, color = Cream, fontSize = 13.sp, maxLines = 1)
-            Text(sub, color = Muted, fontSize = 11.sp, maxLines = 1)
+            Text(title, color = Color.White, fontSize = 13.sp, maxLines = 1)
+            Text(sub, color = Dark.W62, fontSize = 11.sp, maxLines = 1)
         }
-        Text(action, color = Muted, fontSize = 12.sp, modifier = Modifier.clickable(onClick = onAction).padding(8.dp))
+        Text(action, color = Dark.W62, fontSize = 12.sp, modifier = Modifier.clickable(onClick = onAction).padding(8.dp))
     }
 }
 

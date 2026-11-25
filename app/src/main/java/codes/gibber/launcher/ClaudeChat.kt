@@ -9,6 +9,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -96,26 +97,36 @@ fun TalkToClaude(prefs: Prefs) {
     val context = LocalContext.current
     var link by remember { mutableStateOf(prefs.chatLink("dev")) }
     var editing by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(16.dp)
+    // No box, as in the design: a small lit circle with a microphone, and the words beside it.
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .clip(shape)
-            .background(Color(0xFF1F1E23))
-            .border(1.dp, Color(0xFF34333A), shape)
             .combinedClickable(onClick = { ClaudeChat.open(context, link) }, onLongClick = { editing = true })
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(vertical = 4.dp),
     ) {
-        Column(Modifier.weight(1f)) {
-            Text("Talk to Claude", color = Look.Cream, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(
+                    androidx.compose.ui.graphics.Brush.radialGradient(
+                        0f to androidx.compose.ui.graphics.lerp(Dark.Mix, Color.White, 0.4f),
+                        0.55f to Dark.Mix,
+                        1f to Dark.Blue,
+                    )
+                ),
+        ) { Glyph(Glyphs.Mic, 20.dp, Color.White) }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(3.dp)) {
+            Text("Talk to Claude", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
             Text(
-                if (link.isBlank()) "Hold to set the chat it opens" else "Opens your app-launcher chat · hold to change",
-                color = Look.Muted,
+                if (link.isBlank()) "Hold to set the chat it opens" else "Opens app-launcher · hold to change",
+                color = Dark.W62,
                 fontSize = 12.sp,
             )
         }
-        MicMark(36.dp)
     }
     if (editing) {
         ChatLinkDialog("Dev", link, onClose = { editing = false }) {

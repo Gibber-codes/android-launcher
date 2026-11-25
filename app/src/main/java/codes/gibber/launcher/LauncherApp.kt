@@ -1,43 +1,59 @@
 package codes.gibber.launcher
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalFoundationApi::class)
+/** The design's menus and dialogs: the dark pane, square corners, white words. */
+private val DarkScheme = darkColorScheme(
+    primary = Color.White,
+    onPrimary = Color(0xFF111111),
+    surface = Dark.Pane,
+    onSurface = Color.White,
+    onSurfaceVariant = Dark.W62,
+    surfaceContainer = Dark.Pane,
+    surfaceContainerHigh = Dark.Pane,
+    surfaceContainerHighest = Dark.Pane,
+    background = Dark.Night,
+)
+private val Square = Shapes(
+    extraSmall = RectangleShape,
+    small = RectangleShape,
+    medium = RectangleShape,
+    large = RectangleShape,
+    extraLarge = RoundedCornerShape(0.dp),
+)
+
 @Composable
 fun LauncherApp(
     prefs: Prefs,
@@ -46,10 +62,10 @@ fun LauncherApp(
     resumes: Int,
     onAppsChanged: () -> Unit = {},
 ) {
-    MaterialTheme(colorScheme = darkColorScheme()) {
-        val pages = Sections.PAGES
-        val pager = rememberPagerState(initialPage = 0, pageCount = { pages.size })
+    MaterialTheme(colorScheme = DarkScheme, shapes = Square) {
+        val pager = rememberPagerState(initialPage = HOME, pageCount = { TABS.size })
         val scope = rememberCoroutineScope()
+        val context = LocalContext.current
         var drawerOpen by remember { mutableStateOf(false) }
         var favorites by remember { mutableStateOf(prefs.favorites) }
 
@@ -58,11 +74,13 @@ fun LauncherApp(
             prefs.favorites = list
         }
 
-        val context = androidx.compose.ui.platform.LocalContext.current
-        // The equalizer test starts with the launcher, so it hears players that hand over their sound.
-        androidx.compose.runtime.LaunchedEffect(Unit) { Eq.start(context) }
+        // The equalizer starts with the launcher, so it hears players that hand over their sound.
+        LaunchedEffect(Unit) { Eq.start(context) }
         var hubUrl by remember { mutableStateOf(normalizeHubUrl(prefs.hubUrl)) }
         var settingsOpen by remember { mutableStateOf(false) }
+        var hubOpen by remember { mutableStateOf(false) }
+        var ideasOpen by remember { mutableStateOf(false) }
+        var playerOpen by remember { mutableStateOf(false) }
         var moved by remember { mutableStateOf(prefs.sections) }
         var hubProjects by remember { mutableStateOf(prefs.hubProjects) }
         var gameMenu by remember { mutableStateOf<String?>(null) }
@@ -73,27 +91,28 @@ fun LauncherApp(
         var removingWidget by remember { mutableStateOf(false) }
         var wallMenu by remember { mutableStateOf(false) }
         var groups by remember { mutableStateOf(prefs.groups) }
+        var launches by remember { mutableStateOf(prefs.launches) }
 
         fun saveHubUrl(raw: String) {
             prefs.hubUrl = normalizeHubUrl(raw)
-            hubUrl = prefs.hubUrl
+            hubUrl = normalizeHubUrl(prefs.hubUrl)
         }
 
-        androidx.compose.runtime.SideEffect {
-            HubLink.openSettings = {
-                drawerOpen = false
-                settingsOpen = true
-            }
-            HubGames.open = { id ->
-                drawerOpen = false
-                gameMenu = id
-            }
+        SideEffect {
+            HubLink.open = { drawerOpen = false; hubOpen = true }
+            HubLink.openSettings = { drawerOpen = false; settingsOpen = true }
+            HubLink.openIdeas = { drawerOpen = false; ideasOpen = true }
+            HubGames.open = { id -> drawerOpen = false; gameMenu = id }
             HubGames.play = { id ->
                 val live = prefs.liveUrl(id)
                 if (live.isNotBlank()) {
                     drawerOpen = false
                     gamePage = GamePage(live, id)
                 }
+            }
+            Apps.onLaunch = { app ->
+                prefs.countLaunch(app.key)
+                launches = prefs.launches
             }
         }
 
@@ -153,19 +172,23 @@ fun LauncherApp(
             }
         }
 
-        // Pressing Home always brings you back to the Home page.
+        // Pressing Home always brings you back to the Home page, with nothing open over it.
         LaunchedEffect(homePresses) {
             if (homePresses > 0) {
                 drawerOpen = false
                 gameMenu = null
                 gamePage = null
-                pager.animateScrollToPage(0)
+                playerOpen = false
+                ideasOpen = false
+                hubOpen = false
+                settingsOpen = false
+                pager.animateScrollToPage(HOME)
             }
         }
         // Coming back from an app closes the drawer.
         LaunchedEffect(resumes) { drawerOpen = false }
 
-        // A Music group on Home holding Spotify and the JBL app, made once both are installed.
+        // A Music group holding Spotify and the JBL app, made once both are installed.
         LaunchedEffect(apps) {
             if (prefs.musicMade) return@LaunchedEffect
             val music = apps.filter { it.packageName == "com.spotify.music" } +
@@ -178,68 +201,59 @@ fun LauncherApp(
             prefs.musicMade = true
         }
 
-        // A home screen has nowhere to go back to, so Back goes to the Home page and stops there.
-        BackHandler(enabled = true) { scope.launch { pager.animateScrollToPage(0) } }
+        // A home screen has nowhere to go back to, so Back goes to Home and stops there.
+        BackHandler(enabled = true) { scope.launch { pager.animateScrollToPage(HOME) } }
         BackHandler(enabled = drawerOpen) { drawerOpen = false }
 
-        Box(Modifier.fillMaxSize()) {
-            HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { i ->
-                val page = pages[i]
-                PageScreen(
-                    page = page,
-                    apps = apps,
-                    onOpenDrawer = { drawerOpen = true },
-                    moved = moved,
-                    hubProjects = hubProjects,
-                    onAskMove = { moving = it },
-                    onRemove = { a ->
-                        moved = moved + (a.key to Sections.HIDDEN)
-                        prefs.sections = moved
-                    },
-                    onLongPressWallpaper = if (i == 0) ({ wallMenu = true }) else null,
-                    groups = groups,
-                    // Gibber Settings sits as a small button at the top right of the Dev page.
-                    titleAction = if (page.name == "Dev") ({ GearButton { settingsOpen = true } }) else null,
-                    onGroupsChange = { groups = it; prefs.groups = it },
-                    top = if (page.name == "Dev") ({
-                        androidx.compose.foundation.layout.Column(
-                            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
-                        ) {
-                            TalkToClaude(prefs)
-                            EqualizerTest()
-                        }
-                    }) else null,
-                    widgets = {
-                        WidgetArea(
-                            ids = widgetIds,
-                            onIdsChange = { widgetIds = it; prefs.widgets = it },
-                            picking = pickingWidget,
-                            onPickingChange = { pickingWidget = it },
-                            removing = removingWidget,
-                            onRemovingChange = { removingWidget = it },
-                        )
-                    },
-                )
-            }
+        val cells = remember(apps, groups, moved, hubProjects) { Groups.cells(apps, groups, moved, hubProjects) }
+        val kit = PageKit(
+            apps = apps,
+            cells = cells,
+            groups = groups,
+            onGroupsChange = { groups = it; prefs.groups = it },
+            moved = moved,
+            hubProjects = hubProjects,
+            onAskMove = { moving = it },
+            onRemove = { a ->
+                moved = moved + (a.key to Sections.HIDDEN)
+                prefs.sections = moved
+            },
+            onOpenDrawer = { drawerOpen = true },
+        )
 
-            // Dots for the pages, at the bottom.
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = 18.dp),
-            ) {
-                // The design's dots: the page you're on is a short bar.
-                pages.indices.forEach { i ->
-                    val here = i == pager.currentPage
-                    Box(
-                        Modifier
-                            .size(width = if (here) 18.dp else 6.dp, height = 6.dp)
-                            .clip(CircleShape)
-                            .background(if (here) Look.Cream else Look.Dim)
-                            .clickable { scope.launch { pager.animateScrollToPage(i) } }
-                    )
+        Box(Modifier.fillMaxSize()) {
+            OrbBackground()
+            Column(Modifier.fillMaxSize().systemBarsPadding()) {
+                // No clock and no bar at the bottom: the tabs are the only thing along an edge.
+                TabsRow(
+                    current = pager.currentPage,
+                    onPick = { scope.launch { pager.animateScrollToPage(it) } },
+                    trailing = {
+                        TabsTrailing(pager.currentPage, onAll = { drawerOpen = true }, onSettings = { settingsOpen = true })
+                    },
+                    modifier = Modifier.padding(start = 22.dp, end = 16.dp, top = 14.dp),
+                )
+                HorizontalPager(state = pager, modifier = Modifier.weight(1f).fillMaxWidth()) { i ->
+                    when (i) {
+                        0 -> SearchPage(kit, launches)
+                        HOME -> HomePage(
+                            kit,
+                            onOpenPlayer = { playerOpen = true },
+                            onHoldEmpty = { wallMenu = true },
+                            widgets = {
+                                WidgetArea(
+                                    ids = widgetIds,
+                                    onIdsChange = { widgetIds = it; prefs.widgets = it },
+                                    picking = pickingWidget,
+                                    onPickingChange = { pickingWidget = it },
+                                    removing = removingWidget,
+                                    onRemovingChange = { removingWidget = it },
+                                )
+                            },
+                        )
+                        2 -> DevPage(kit, prefs, hubUrl, onOpenIdeas = { ideasOpen = true })
+                        else -> MechanicPage(kit)
+                    }
                 }
             }
 
@@ -254,7 +268,24 @@ fun LauncherApp(
                     onClose = { drawerOpen = false },
                     onAppsChanged = onAppsChanged,
                     resumes = resumes,
+                    seenBuild = prefs.seenBuild,
                     onAskMove = { moving = it },
+                )
+            }
+            if (playerOpen) PlayerScreen(onClose = { playerOpen = false })
+            if (ideasOpen) IdeasScreen(hubUrl, onClose = { ideasOpen = false })
+            if (hubOpen) {
+                key(hubUrl) {
+                    HubScreen(hubUrl = hubUrl, onSaveUrl = ::saveHubUrl, isShown = true, onGoHome = { hubOpen = false })
+                }
+            }
+            if (settingsOpen) {
+                SettingsScreen(
+                    prefs = prefs,
+                    hubUrl = hubUrl,
+                    onSaveUrl = ::saveHubUrl,
+                    resumes = resumes,
+                    onClose = { settingsOpen = false },
                 )
             }
             val menuFor = gameMenu
@@ -273,24 +304,16 @@ fun LauncherApp(
             }
             val playing = gamePage
             if (playing != null) {
-                androidx.compose.runtime.key(playing.url) {
+                key(playing.url) {
                     GameScreen(page = playing, hubUrl = hubUrl, onClose = { gamePage = null })
                 }
             }
-            if (settingsOpen) {
-                SettingsScreen(
-                    hubUrl = hubUrl,
-                    onSaveUrl = ::saveHubUrl,
-                    resumes = resumes,
-                    onClose = { settingsOpen = false },
-                )
-            }
             if (wallMenu) {
-                androidx.compose.material3.AlertDialog(
+                AlertDialog(
                     onDismissRequest = { wallMenu = false },
                     title = { Text("Home screen") },
                     text = {
-                        androidx.compose.foundation.layout.Column {
+                        Column {
                             Text(
                                 "Add a widget",
                                 color = Color.White,
@@ -311,9 +334,7 @@ fun LauncherApp(
                             }
                         }
                     },
-                    confirmButton = {
-                        androidx.compose.material3.TextButton(onClick = { wallMenu = false }) { Text("Cancel") }
-                    },
+                    confirmButton = { TextButton(onClick = { wallMenu = false }) { Text("Cancel") } },
                 )
             }
             val app = moving
@@ -333,3 +354,5 @@ fun LauncherApp(
     }
 }
 
+/** Home's place among the tabs: Search is to its left, Dev and Mechanic to its right. */
+const val HOME = 1
