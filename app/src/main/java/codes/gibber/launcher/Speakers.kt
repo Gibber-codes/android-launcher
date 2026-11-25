@@ -125,10 +125,36 @@ object Speakers {
     }
 
     /**
+     * A Bluetooth pop-up rather than the full settings screen: Samsung's Bluetooth pop-up on a
+     * Galaxy, else the system's pop-up for picking where sound plays, else Bluetooth settings.
+     */
+    fun openBluetoothPopup(context: Context) {
+        if (openSamsungBluetooth(context)) return
+        openOutputs(context)
+    }
+
+    /**
+     * Samsung's Bluetooth pop-up (its Settings' BluetoothScanDialog: the paired devices and a
+     * scan, over the screen you're on). Sources: the action is declared on that activity in a
+     * published One UI SecSettings manifest (github.com/GrifoDev/SuperMan-ModdedFiles,
+     * SecSettings/AndroidManifest.xml), and Samsung's own SystemUI starts it the same way
+     * (github.com/488315/android_samsung_frameworks_base, packages/SystemUI/src/com/android/
+     * settingslib/bluetooth/BluetoothEventManager.java). Not public: a phone without it, or one
+     * that refuses it, throws and the next try runs. AOSP has no Bluetooth panel to try
+     * (Settings' manifest declares only the internet, NFC, Wi-Fi and volume panels).
+     */
+    private fun openSamsungBluetooth(context: Context): Boolean = try {
+        context.startActivity(Intent("com.samsung.settings.bluetooth.scandialog.LAUNCH").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        true
+    } catch (_: Throwable) {
+        false
+    }
+
+    /**
      * The system's pop-up for picking where sound plays (speakers and headphones), the one the
      * notification shade opens; Bluetooth settings where the phone has no such pop-up for apps.
      */
-    fun openOutputs(context: Context) {
+    private fun openOutputs(context: Context) {
         if (Build.VERSION.SDK_INT >= 34) {
             val shown = try { MediaRouter2.getInstance(context).showSystemOutputSwitcher() } catch (_: Throwable) { false }
             if (shown) return
@@ -169,8 +195,8 @@ object Speakers {
 
 /**
  * Your speaker and headphones under Playing on, each saying whether it's connected; a tap opens
- * its app. Beside them, the Bluetooth button: the system's pop-up for where sound plays, or turning
- * Bluetooth on if it's off.
+ * its app. Beside them, the Bluetooth button: a Bluetooth pop-up (Samsung's, else the one for where
+ * sound plays), or turning Bluetooth on if it's off.
  */
 @Composable
 fun SpeakersPanel() {
@@ -201,7 +227,7 @@ fun SpeakersPanel() {
         note = null
         val permission = Speakers.permission
         when {
-            Speakers.isOn(context) -> Speakers.openOutputs(context)
+            Speakers.isOn(context) -> Speakers.openBluetoothPopup(context)
             permission != null && !Speakers.allowed(context) -> ask.launch(permission)
             else -> turnOn()
         }
