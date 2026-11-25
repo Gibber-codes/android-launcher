@@ -134,7 +134,8 @@ fun SettingsScreen(
                 StatusRow(
                     dot = Dark.Green,
                     title = "Build ${BuildConfig.VERSION_CODE}",
-                    sub = busy ?: "Updates itself quietly",
+                    sub = busy ?: if (UpdateNotice.allowed(context)) "Tells you when a new build is out"
+                        else "Notifications are off, so no update notices",
                     action = "Check",
                     onAction = {
                         if (busy == null) scope.launch {
