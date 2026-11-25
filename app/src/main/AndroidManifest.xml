@@ -13,7 +13,7 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- Lets Home's month show your events, once you allow it. -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
-    <!-- Lets the music screen turn Bluetooth on and connect your speaker or headphones, once you allow it. -->
+    <!-- Lets the music screen turn Bluetooth on and tell which speaker or headphones are connected, once you allow it. -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />

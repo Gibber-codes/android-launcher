@@ -9,8 +9,8 @@ background with slowly drifting gradient circles behind frosted glass.
 - **Dev:** Talk to Claude (hold it to change the chat), the Ideas widget, your games and dev tools. The gear opens Gibber Settings.
 - **Mechanic:** Jobs, Parts and Mechanic tools.
 - **All apps:** swipe up anywhere, swipe down to close. Every app A to Z, with search, the alphabet down the right side, and Update.
-- **Music screen:** the song and its controls, the speaker it plays on with its volume, and a bass boost (a switch and a strength). The boost is made on the phone, so it reaches any speaker, linked JBL speakers too; the curve is kept centred so volume stays even.
-- **Your speaker and headphones:** under Playing on, a tile for the JBL Xtreme 5 and one for the JBL Endurance, found among paired devices by a word in their name (`Speakers.kt`). A tap turns Bluetooth on if it's off and connects; once connected, a tap opens JBL One or JBL Headphones. Android has no public way for an app to connect a paired device: the launcher tries the hidden call, and when Android refuses it opens the Bluetooth screen and says so.
+- **Music screen:** the song, its artist and cover (from Spotify or any player, once notification access is on) and its controls, your speaker and headphones, and a bass boost (a switch and a strength). The boost is made on the phone, so it reaches any speaker, linked JBL speakers too; the curve is kept centred so volume stays even.
+- **Your speaker and headphones:** under Playing on, a tile for the JBL Xtreme 5 and one for the JBL Endurance, each saying Connected (with a green dot) or Not connected (`Speakers.kt`). The Xtreme 5 is known by "Gabes JBL" or "Xtreme", the Endurance by "Endurance", matched against the phone's sound outputs, and by a paired device's address once Nearby devices is allowed. A tap opens JBL One or JBL Headphones. The square Bluetooth button beside them opens Bluetooth settings, or turns Bluetooth on if it's off.
 - **Hold an app:** Move to a section, Merge, Remove from this card, Uninstall. **Hold a section's name:** edit mode, where you tick apps and remove or merge them at once.
 - **Tap a game:** its pop-up, with Play, the dev server switch, Dev build, Style, Talk and older versions.
 - **Gibber Hub, Gibber Settings and Ideas** are apps in the list and open full screen.
@@ -20,7 +20,7 @@ Built with Kotlin and Jetpack Compose. Android 8 or newer.
 
 ### Things to allow once
 
-- **Notification access** (the music screen offers it): shows what's playing and the number badges on Home's apps.
+- **Notification access** (the music screen offers it): shows what's playing and the number badges on Home's apps. On Android 13 and later a sideloaded app's switch is greyed out ("Restricted setting"): the music screen then says to open App info, tap ⋮, choose Allow restricted settings, and try again.
 - **Calendar** (tap "Show your events" under the month): shows your events.
 
 ## Get it on your phone
