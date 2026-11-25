@@ -54,7 +54,7 @@ fun HubScreen(hubUrl: String, onSaveUrl: (String) -> Unit, isShown: Boolean, onG
     Column(
         Modifier
             .fillMaxSize()
-            .background(Color(0xFF101014))
+            .background(Dark.Night)
             .imePadding()
     ) {
         if (hubUrl.isBlank()) {

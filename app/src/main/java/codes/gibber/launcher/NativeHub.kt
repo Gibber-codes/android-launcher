@@ -134,96 +134,98 @@ fun NativeHub(hubUrl: String, isShown: Boolean, onGoHome: () -> Unit) {
 
     BackHandler(enabled = isShown) { onGoHome() }
 
-    LazyColumn(
-        Modifier
-            .fillMaxSize()
-            .background(Color(0xFF101014)),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Image(
-                    painter = painterResource(R.drawable.gibbercodes_logo),
-                    contentDescription = "GibberCodes",
-                    modifier = Modifier.size(52.dp),
-                )
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(name ?: "Gibber Hub", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
-                    val (dot, words) = when (reached) {
-                        true -> Green to "Connected to your PC"
-                        false -> Red to "Can't reach your PC"
-                        null -> Dim to "Looking for your PC…"
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(8.dp).clip(CircleShape).background(dot))
-                        Spacer(Modifier.width(6.dp))
-                        Text(words, color = Dim, fontSize = 13.sp)
-                    }
-                }
-            }
-        }
-
-        if (reached == false) {
+    Box(Modifier.fillMaxSize()) {
+        OrbBackground()
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 22.dp, end = 22.dp, top = 16.dp, bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            item { BackLink("Back", onGoHome) }
             item {
-                Panel {
-                    Text("The hub didn't answer.", color = Color.White, fontSize = 15.sp)
-                    Spacer(Modifier.height(4.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Image(
+                            painter = painterResource(R.drawable.gibbercodes_logo),
+                            contentDescription = "GibberCodes",
+                            modifier = Modifier.size(28.dp),
+                        )
+                        ScreenTitle(name ?: "Gibber Hub")
+                    }
                     Text(
-                        "Check it's running on your PC and your phone is on the same Wi-Fi. The address is in Gibber Settings.",
-                        color = Dim,
+                        when (reached) {
+                            true -> "Your PC is on · home Wi-Fi"
+                            false -> "Can't reach your PC"
+                            null -> "Looking for your PC…"
+                        },
+                        color = Dark.W62,
                         fontSize = 13.sp,
                     )
-                    Spacer(Modifier.height(10.dp))
-                    Chip("Try again") { reached = null; refreshes++ }
                 }
             }
-        }
 
-        if (workspaces.isNotEmpty()) {
-            item { Heading("Games and projects") }
-            items(workspaces, key = { it.id }) { w ->
-                WorkspaceCard(
-                    w = w,
-                    busy = w.id in busy,
-                    onStart = { press("start", w) },
-                    onStop = { press("stop", w) },
-                    onOpen = { path -> page = OpenPage(api.pageOf(w, path), w.id) },
-                )
-            }
-        }
-
-        val accounts = usage
-        if (!accounts.isNullOrEmpty()) {
-            item { Heading("Claude usage") }
-            items(accounts, key = { "u-" + it.name }) { UsageCard(it) }
-        }
-
-        val notes = inbox
-        if (!notes.isNullOrEmpty()) {
-            item { Heading("Sent to Claude") }
-            items(notes, key = { "i-" + it.id }) { n ->
-                Panel {
-                    Text(n.kind.replaceFirstChar { it.uppercase() }, color = Color.White, fontSize = 14.sp)
-                    Text(n.state.replaceFirstChar { it.uppercase() }, color = if (n.state == "failed") Red else Dim, fontSize = 12.sp)
-                    n.note?.let { Text(it, color = Dim, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp)) }
+            if (reached == false) {
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 10.dp)) {
+                        Text(
+                            "Check the hub is running on your PC and your phone is on the same Wi-Fi. The address is in Gibber Settings.",
+                            color = Dark.W62,
+                            fontSize = 13.sp,
+                        )
+                        FrostButton("Try again", hi = true) { reached = null; refreshes++ }
+                    }
                 }
             }
-        }
 
-        item {
-            Spacer(Modifier.height(4.dp))
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable { page = OpenPage(hubUrl, null) }
-                    .padding(vertical = 14.dp, horizontal = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Open the full hub", color = Color.White, fontSize = 15.sp, modifier = Modifier.weight(1f))
-                Text("›", color = Dim, fontSize = 20.sp)
+            if (workspaces.isNotEmpty()) {
+                item { Head("Games and projects", Modifier.padding(top = 8.dp)) }
+                items(workspaces, key = { it.id }) { w ->
+                    WorkspaceRow(
+                        w = w,
+                        busy = w.id in busy,
+                        onStart = { press("start", w) },
+                        onStop = { press("stop", w) },
+                        onOpen = { path -> page = OpenPage(api.pageOf(w, path), w.id) },
+                    )
+                }
+            }
+
+            val accounts = usage
+            if (!accounts.isNullOrEmpty()) {
+                item { Head("Claude usage", Modifier.padding(top = 18.dp)) }
+                items(accounts, key = { "u-" + it.name }) { UsageBlock(it, showName = accounts.size > 1) }
+            }
+
+            val notes = inbox
+            if (!notes.isNullOrEmpty()) {
+                item { Head("Sent to Claude", Modifier.padding(top = 18.dp)) }
+                items(notes, key = { "i-" + it.id }) { n ->
+                    StatusRow(
+                        dot = when (n.state) {
+                            "failed" -> Red
+                            "done" -> Dim
+                            else -> Dark.Green
+                        },
+                        title = n.note ?: n.kind.replaceFirstChar { it.uppercase() },
+                        sub = n.state.replaceFirstChar { it.uppercase() },
+                        action = null,
+                    )
+                }
+            }
+
+            item {
+                Row(
+                    Modifier
+                        .padding(top = 18.dp)
+                        .fillMaxWidth()
+                        .frost()
+                        .clickable { page = OpenPage(hubUrl, null) }
+                        .padding(vertical = 14.dp, horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Open the full hub", color = Color.White, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                    Glyph(Glyphs.Forward, 18.dp, Dark.W62)
+                }
             }
         }
     }
@@ -243,45 +245,12 @@ private fun whenOf(iso: String): String = try {
 }
 
 @Composable
-private fun Heading(text: String) {
-    Text(
-        text.uppercase(),
-        color = Dim,
-        fontSize = 12.sp,
-        fontWeight = FontWeight.Medium,
-        modifier = Modifier.padding(top = 8.dp),
-    )
-}
+internal fun Chip(label: String, strong: Boolean = false, onClick: () -> Unit) = FrostButton(label, hi = strong, onClick = onClick)
 
-@Composable
-private fun Panel(content: @Composable () -> Unit) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(PanelColor)
-            .padding(14.dp)
-    ) { content() }
-}
-
-@Composable
-internal fun Chip(label: String, strong: Boolean = false, onClick: () -> Unit) {
-    Text(
-        label,
-        color = if (strong) Color(0xFF101014) else Color.White,
-        fontSize = 14.sp,
-        fontWeight = if (strong) FontWeight.SemiBold else FontWeight.Normal,
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(if (strong) Color.White else Color.White.copy(alpha = 0.12f))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-    )
-}
-
+/** A game or project: green while it runs. Open it when it's on, start it when it's off. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun WorkspaceCard(
+private fun WorkspaceRow(
     w: HubWorkspace,
     busy: Boolean,
     onStart: () -> Unit,
@@ -290,63 +259,55 @@ private fun WorkspaceCard(
 ) {
     val (color, words) = when {
         busy -> Amber to "Working…"
-        w.state == "up" -> Green to "Running"
+        w.state == "up" -> Dark.Green to "Dev server on"
         w.state == "starting" -> Amber to "Starting…"
         w.state == "other" -> Red to "Something else has port ${w.port}"
-        else -> Dim to "Off"
+        else -> Dim to "Dev server off"
     }
-    Panel {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(w.name, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Medium)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(7.dp).clip(CircleShape).background(color))
-                    Spacer(Modifier.width(6.dp))
-                    Text(words, color = Dim, fontSize = 12.sp)
-                }
-            }
-            if (!busy && w.startable) {
-                when (w.state) {
-                    "up", "starting" -> Chip("Stop", onClick = onStop)
-                    "down" -> Chip("Start", strong = true, onClick = onStart)
-                }
-            }
-        }
-        if (w.state == "up") {
-            val nav = w.nav.ifEmpty { listOf(HubNav("open", "Open", "/")) }
-            Spacer(Modifier.height(10.dp))
+    val first = w.nav.firstOrNull()?.path ?: "/"
+    Column {
+        StatusRow(
+            dot = color,
+            title = w.name,
+            sub = words,
+            action = when {
+                w.state == "up" -> "Open"
+                !busy && w.startable && w.state == "down" -> "Start"
+                else -> null
+            },
+            onAction = { if (w.state == "up") onOpen(first) else onStart() },
+            onClick = if (w.state == "up") ({ onOpen(first) }) else null,
+        )
+        if (w.state == "up" && (w.nav.size > 1 || w.startable)) {
             FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.padding(start = 20.dp, bottom = 6.dp),
             ) {
-                nav.forEachIndexed { i, n -> Chip(n.name, strong = i == 0) { onOpen(n.path) } }
+                w.nav.drop(1).forEach { n -> FrostButton(n.name) { onOpen(n.path) } }
+                if (w.startable && !busy) FrostButton("Stop", onClick = onStop)
             }
         }
     }
 }
 
 @Composable
-private fun UsageCard(a: HubAccount) {
-    Panel {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(a.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-            a.plan?.let { Text(it, color = Dim, fontSize = 12.sp) }
-        }
+private fun UsageBlock(a: HubAccount, showName: Boolean) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(vertical = 4.dp)) {
+        if (showName) Text(a.name + (a.plan?.let { " · $it" } ?: ""), color = Color.White, fontSize = 13.sp)
         if (a.error != null && a.session == null && a.week == null) {
-            Spacer(Modifier.height(6.dp))
-            Text(a.error, color = Dim, fontSize = 13.sp)
-            return@Panel
+            Text(a.error, color = Dark.W62, fontSize = 12.sp)
+            return@Column
         }
-        a.session?.let { Spacer(Modifier.height(10.dp)); Meter("Five hours", it) }
-        a.week?.let { Spacer(Modifier.height(10.dp)); Meter("This week", it) }
+        a.session?.let { Meter("This session", it) }
+        a.week?.let { Meter("This week", it) }
         a.pace?.let { p ->
             val words = when (p.state) {
                 "ahead" -> "Going fast" + (p.runsOut?.let { ": at this pace it runs out ${whenOf(it)}" } ?: "")
                 "behind" -> "About ${p.unused}% would go unused this week"
                 else -> "Right on pace"
             }
-            Spacer(Modifier.height(8.dp))
-            Text(words, color = if (p.state == "ahead") Amber else Dim, fontSize = 12.sp)
+            Text(words, color = if (p.state == "ahead") Amber else Dark.W40, fontSize = 11.sp)
         }
     }
 }
@@ -354,23 +315,12 @@ private fun UsageCard(a: HubAccount) {
 @Composable
 private fun Meter(label: String, limit: HubLimit) {
     val used = limit.used.coerceIn(0, 100)
-    Row {
-        Text(label, color = Dim, fontSize = 12.sp, modifier = Modifier.weight(1f))
-        Text("$used%", color = Color.White, fontSize = 12.sp)
-    }
-    Spacer(Modifier.height(4.dp))
-    LinearProgressIndicator(
-        progress = { used / 100f },
-        modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
-        color = when {
-            used >= 90 -> Red
-            used >= 70 -> Amber
-            else -> Green
-        },
-        trackColor = Color.White.copy(alpha = 0.1f),
-        drawStopIndicator = {},
-    )
-    if (limit.resets.isNotBlank()) {
-        Text("Resets ${whenOf(limit.resets)}", color = Dim, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row {
+            Text(label, color = Dark.W62, fontSize = 12.sp, modifier = Modifier.weight(1f))
+            Text("$used%", color = Color.White, fontSize = 12.sp)
+        }
+        Bar(used / 100f, Modifier.fillMaxWidth())
+        if (limit.resets.isNotBlank()) Text("Resets ${whenOf(limit.resets)}", color = Dark.W40, fontSize = 11.sp)
     }
 }

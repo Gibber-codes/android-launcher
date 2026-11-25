@@ -5,6 +5,13 @@ import android.util.LruCache
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -55,6 +62,75 @@ fun AppIcon(app: AppEntry, size: Dp, mono: Boolean = false) {
         Image(bmp.asImageBitmap(), contentDescription = null, modifier = Modifier.size(size))
     } else {
         Spacer(Modifier.size(size))
+    }
+}
+
+/**
+ * An app as the design draws it: its whole icon filling a rounded square, like a phone's own home
+ * screen. Android's adaptive icons are drawn layer by layer so their colour reaches the corners.
+ */
+@Composable
+fun AppTile(app: AppEntry, size: Dp, corner: Dp = 14.dp, badge: Int = 0) {
+    val context = LocalContext.current
+    val px = with(LocalDensity.current) { size.roundToPx() }
+    val cacheKey = "${app.key}@$px~tile#${if (HubGames.isGame(app)) GameIcons.version else 0}"
+    val bitmap by produceState<Bitmap?>(initialValue = iconCache.get(cacheKey), cacheKey) {
+        value = iconCache.get(cacheKey) ?: withContext(Dispatchers.IO) {
+            tileBitmap(context, app, px)?.also { iconCache.put(cacheKey, it) }
+        }
+    }
+    Box {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(size)
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(corner))
+                .background(if (HubLink.isIdeas(app)) Color(0xFFF2C230) else Color(0xFF16121F)),
+        ) {
+            val bmp = bitmap
+            when {
+                HubLink.isIdeas(app) -> Glyph(Glyphs.Bulb, size * 0.5f, Color(0xFF222222))
+                bmp != null -> Image(bmp.asImageBitmap(), contentDescription = null, modifier = Modifier.size(size))
+            }
+        }
+        if (badge > 0) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 5.dp, y = (-5).dp)
+                    .defaultMinSize(minWidth = 18.dp)
+                    .height(18.dp)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(9.dp))
+                    .background(Color.White)
+                    .padding(horizontal = 4.dp),
+            ) {
+                Text(if (badge > 99) "99+" else "$badge", color = Color(0xFF111111), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+private fun tileBitmap(context: android.content.Context, app: AppEntry, px: Int): Bitmap? {
+    if (HubGames.isGame(app) || HubLink.isOwn(app) || Shortcuts.isShortcut(app)) return Apps.loadIcon(context, app, px)
+    val d = Apps.iconDrawable(context, app) ?: return null
+    return try {
+        val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(bmp)
+        if (d is android.graphics.drawable.AdaptiveIconDrawable) {
+            // A layer is 108 units with the middle 72 shown, so it's drawn half as big again, centred.
+            val inset = px / 4
+            d.background?.let { it.setBounds(-inset, -inset, px + inset, px + inset); it.draw(canvas) }
+            d.foreground?.let { it.setBounds(-inset, -inset, px + inset, px + inset); it.draw(canvas) }
+        } else {
+            canvas.drawColor(android.graphics.Color.rgb(42, 37, 48))
+            val pad = px / 8
+            d.setBounds(pad, pad, px - pad, px - pad)
+            d.draw(canvas)
+        }
+        bmp
+    } catch (e: Exception) {
+        Apps.loadIcon(context, app, px)
     }
 }
 

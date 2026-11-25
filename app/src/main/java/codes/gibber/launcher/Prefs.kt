@@ -10,9 +10,20 @@ class Prefs(context: Context) {
         get() = sp.getString(KEY_FAVORITES, "")!!.split("\n").filter { it.isNotBlank() }
         set(value) = sp.edit().putString(KEY_FAVORITES, value.joinToString("\n")).apply()
 
+    /** Gibber Hub's address; your PC on the home Wi-Fi until you set another. */
     var hubUrl: String
-        get() = sp.getString(KEY_HUB_URL, "")!!
+        get() = sp.getString(KEY_HUB_URL, "")!!.ifBlank { HOME_HUB }
         set(value) = sp.edit().putString(KEY_HUB_URL, value.trim()).apply()
+
+    /** How often you opened each app from the launcher, for Search's Used most. */
+    var launches: Map<String, Int>
+        get() = lines("launches").mapNotNull { l -> l.split('\t').takeIf { it.size >= 2 }?.let { p -> p[1].toIntOrNull()?.let { p[0] to it } } }.toMap()
+        set(value) = putLines("launches", value.map { "${it.key}\t${it.value}" })
+
+    fun countLaunch(key: String) {
+        val now = launches
+        launches = now + (key to (now[key] ?: 0) + 1)
+    }
 
     /** Apps you put in Games, and games you took out of it. */
     var gamesAdded: Set<String>
@@ -114,6 +125,7 @@ class Prefs(context: Context) {
         const val KEY_GAMES_ADDED = "games_added"
         const val KEY_GAMES_REMOVED = "games_removed"
         const val KEY_DEV_URL = "dev_url"
+        const val HOME_HUB = "http://192.168.1.216:5175"
 
         /** Chats made for a project before you set one here; a link you save or clear replaces it. */
         val STARTING_CHATS = mapOf(

@@ -1,49 +1,62 @@
 package codes.gibber.launcher
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
-import androidx.compose.ui.platform.LocalDensity
-import kotlin.math.abs
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 
-/** Every app, A to Z, with search and an alphabet strip down the right side. */
+/** A line of the list: a letter's heading, or an app. */
+private sealed class DrawerLine(val key: String) {
+    class Letter(val c: Char) : DrawerLine("letter-$c")
+    class App(val app: AppEntry) : DrawerLine(app.key)
+}
+
+/** All apps: every app A to Z, with search, the Update button and the alphabet down the right side. Swipe down to close. */
 @Composable
 fun AppDrawer(
     apps: List<AppEntry>,
@@ -52,6 +65,7 @@ fun AppDrawer(
     onClose: () -> Unit,
     onAppsChanged: () -> Unit = {},
     resumes: Int = 0,
+    seenBuild: Int = 0,
     onAskMove: (AppEntry) -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -59,32 +73,43 @@ fun AppDrawer(
     val shown = remember(apps, query) {
         if (query.isBlank()) apps else apps.filter { it.label.contains(query.trim(), ignoreCase = true) }
     }
+    val lines = remember(shown, query) {
+        if (query.isNotBlank()) shown.map { DrawerLine.App(it) }
+        else buildList<DrawerLine> {
+            var last: Char? = null
+            shown.forEach { a ->
+                if (a.letter != last) { add(DrawerLine.Letter(a.letter)); last = a.letter }
+                add(DrawerLine.App(a))
+            }
+        }
+    }
     val letters = remember(shown) { shown.map { it.letter }.distinct() }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
     fun jumpTo(letter: Char) {
-        val index = shown.indexOfFirst { it.letter == letter }
+        val index = lines.indexOfFirst { it is DrawerLine.Letter && it.c == letter }
         if (index >= 0) scope.launch { listState.scrollToItem(index) }
     }
 
-    // Swiping down closes the list, when it's at the top or the swipe starts on the search bar.
+    // Swiping down closes the list, when it's at the top or the swipe starts above the list.
     // It watches the touch without taking it, so scrolling the list works as before.
     val density = LocalDensity.current
     val swipeDownPx = with(density) { 90.dp.toPx() }
-    val stripPx = with(density) { 44.dp.toPx() }
+    val stripPx = with(density) { 30.dp.toPx() }
     var listTop by remember { mutableFloatStateOf(0f) }
 
-    Column(
+    Box(
         Modifier
             .fillMaxSize()
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
             .pointerInput(onClose) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                     val onStrip = down.position.x > size.width - stripPx
                     val atTop = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
-                    val onSearch = down.position.y < listTop
-                    if (onStrip || !(atTop || onSearch)) return@awaitEachGesture
+                    val above = down.position.y < listTop
+                    if (onStrip || !(atTop || above)) return@awaitEachGesture
                     while (true) {
                         val change = awaitPointerEvent(PointerEventPass.Initial)
                             .changes.firstOrNull { it.id == down.id } ?: break
@@ -99,56 +124,96 @@ fun AppDrawer(
                     }
                 }
             }
-            .background(Color(0xF2101014))
-            .systemBarsPadding()
-            .padding(start = 20.dp, end = 8.dp, top = 12.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 12.dp)) {
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            placeholder = { Text("Search apps") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-            keyboardActions = KeyboardActions(onGo = {
-                shown.firstOrNull()?.let { Apps.launch(context, it) }
-            }),
-            modifier = Modifier.weight(1f),
-        )
-        UpdateButton(resumes = resumes, modifier = Modifier.padding(start = 14.dp))
-        }
-
-        Row(
-            Modifier
-                .fillMaxSize()
-                .onGloballyPositioned { listTop = it.positionInRoot().y }
+        OrbBackground()
+        Column(
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            modifier = Modifier.fillMaxSize().systemBarsPadding().padding(start = 22.dp, top = 16.dp),
         ) {
-            LazyColumn(state = listState, modifier = Modifier.weight(1f)) {
-                items(shown, key = { it.key }) { app ->
-                    AppRow(
-                        app = app,
-                        textSize = 18.sp,
-                        iconSize = 36.dp,
-                        actions = buildList {
-                            add(RowAction("Move to a section") { onAskMove(app) })
-                            when {
-                                HubLink.isOwn(app) -> {}
-                                Shortcuts.isShortcut(app) -> add(RowAction("Remove shortcut") {
-                                    Shortcuts.remove(context, app)
-                                    onFavoritesChange(favorites - app.key)
-                                    onAppsChanged()
-                                })
-                                else -> add(RowAction("App info") { Apps.openInfo(context, app) })
-                            }
-                            if (Apps.canUninstall(context, app)) add(RowAction("Uninstall") { Apps.uninstall(context, app) })
-                        },
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 22.dp)) {
+                Box(Modifier.weight(1f)) { BackLink("Your apps", onClose) }
+                UpdateButton(resumes = resumes)
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.padding(end = 22.dp).fillMaxWidth().height(46.dp).frost().padding(horizontal = 14.dp),
+            ) {
+                Glyph(Glyphs.Search, 18.dp, Dark.W62)
+                Box(Modifier.weight(1f)) {
+                    if (query.isEmpty()) Text("Search apps", color = Dark.W62, fontSize = 15.sp)
+                    BasicTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        singleLine = true,
+                        textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
+                        cursorBrush = SolidColor(Color.White),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                        keyboardActions = KeyboardActions(onGo = { shown.firstOrNull()?.let { Apps.launch(context, it) } }),
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
             }
-            if (query.isBlank() && letters.size > 1) {
-                AlphabetStrip(letters = letters, onLetter = ::jumpTo)
+            if (seenBuild > 0) {
+                Text("Gibber Launcher build ${BuildConfig.VERSION_CODE}", color = Dark.W40, fontSize = 12.sp)
+            }
+            Row(
+                Modifier
+                    .fillMaxSize()
+                    .onGloballyPositioned { listTop = it.positionInRoot().y }
+            ) {
+                LazyColumn(state = listState, modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                    items(lines.size, key = { lines[it].key }) { i ->
+                        when (val line = lines[i]) {
+                            is DrawerLine.Letter -> Text(
+                                line.c.toString(),
+                                color = Dark.W40,
+                                fontFamily = Dark.Mono,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                            is DrawerLine.App -> DrawerRow(
+                                app = line.app,
+                                actions = buildList {
+                                    val app = line.app
+                                    add(RowAction("Move to a section") { onAskMove(app) })
+                                    if (Shortcuts.isShortcut(app)) add(RowAction("Remove shortcut") {
+                                        Shortcuts.remove(context, app)
+                                        onFavoritesChange(favorites - app.key)
+                                        onAppsChanged()
+                                    })
+                                    if (Apps.canUninstall(context, app)) add(RowAction("Uninstall") { Apps.uninstall(context, app) })
+                                },
+                            )
+                        }
+                    }
+                    item { Box(Modifier.height(28.dp)) }
+                }
+                if (query.isBlank() && letters.size > 1) AlphabetStrip(letters = letters, onLetter = ::jumpTo)
             }
         }
+    }
+}
+
+/** One app in the list: its tile and its name. Tap opens it; hold opens its menu. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun DrawerRow(app: AppEntry, actions: List<RowAction>) {
+    val context = LocalContext.current
+    var menuOpen by remember { mutableStateOf(false) }
+    Box {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(46.dp)
+                .combinedClickable(onClick = { Apps.launch(context, app) }, onLongClick = { menuOpen = true }),
+        ) {
+            AppTile(app, 36.dp, corner = 10.dp)
+            Text(app.label, color = Color.White, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        HoldMenu(menuOpen, actions) { menuOpen = false }
     }
 }
 
@@ -159,22 +224,16 @@ private fun AlphabetStrip(letters: List<Char>, onLetter: (Char) -> Unit) {
         return letters[i]
     }
     Column(
-        verticalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceEvenly,
+        verticalArrangement = Arrangement.SpaceEvenly,
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .fillMaxHeight()
-            .width(28.dp)
+            .fillMaxHeight(0.8f)
+            .width(22.dp)
+            .pointerInput(letters) { detectTapGestures { offset -> onLetter(letterAt(offset.y, size.height)) } }
             .pointerInput(letters) {
-                detectTapGestures { offset -> onLetter(letterAt(offset.y, size.height)) }
-            }
-            .pointerInput(letters) {
-                detectVerticalDragGestures { change, _ ->
-                    onLetter(letterAt(change.position.y, size.height))
-                }
+                detectVerticalDragGestures { change, _ -> onLetter(letterAt(change.position.y, size.height)) }
             },
     ) {
-        letters.forEach { c ->
-            Box { Text(c.toString(), color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp) }
-        }
+        letters.forEach { c -> Text(c.toString(), color = Dark.W62, fontFamily = Dark.Mono, fontSize = 9.sp) }
     }
 }
