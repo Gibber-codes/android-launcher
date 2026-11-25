@@ -88,8 +88,9 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * A quiet look on GitHub at most every half hour. A new build downloads by itself and installs
-     * the next time you leave the launcher; without the install permission it posts the notification once.
+     * A quiet look on GitHub at most every half hour. A new build always posts the notification once,
+     * then downloads by itself and tries to install the next time you leave the launcher. The
+     * notification stays because Android often still wants a tap, which it won't show in the background.
      */
     private fun checkForUpdate() {
         val now = System.currentTimeMillis()
@@ -101,18 +102,13 @@ class MainActivity : ComponentActivity() {
                 UpdateNotice.clear(this@MainActivity)
                 return@launch
             }
-            if (Build.VERSION.SDK_INT >= 31 && Updater.canInstall(this@MainActivity) && !updating) {
-                if (readyApk?.name?.contains("-${release.build}.apk") == true) return@launch
-                val apk = Updater.download(this@MainActivity, release)
-                if (apk != null) {
-                    readyApk = apk
-                    UpdateNotice.clear(this@MainActivity)
-                    return@launch
-                }
-            }
             if (prefs.notifiedBuild != release.build) {
                 prefs.notifiedBuild = release.build
                 UpdateNotice.show(this@MainActivity, release.build)
+            }
+            if (Build.VERSION.SDK_INT >= 31 && Updater.canInstall(this@MainActivity) && !updating) {
+                if (readyApk?.name?.contains("-${release.build}.apk") == true) return@launch
+                Updater.download(this@MainActivity, release)?.let { readyApk = it }
             }
         }
     }

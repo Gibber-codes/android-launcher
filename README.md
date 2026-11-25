@@ -31,7 +31,7 @@ it's merged into `main`. A commit on `main` whose message holds `[no release]` b
 
 **First install:** on your phone, open the newest release, tap `gibber-launcher.apk`, and install it. Then press Home and pick **Gibber Launcher** (Settings > Apps > Choose default apps > Home app on Samsung).
 
-**Updates after that:** a new build downloads by itself and installs when you leave the launcher, or open Gibber Settings and tap **Check** on the Launcher row. The first time, Android asks you to let Gibber Launcher install apps; turn that on, come back and tap Check again.
+**Updates after that:** a new build posts a "Gibber Launcher update ready" notification (tap it to install), downloads by itself and tries to install when you leave the launcher; or open Gibber Settings and tap **Check** on the Launcher row. The launcher looks at most every half hour, when you return to Home. If GitHub's hourly limit for the API is used up, it reads the latest release's web page instead. The first time, Android asks you to let Gibber Launcher install apps; turn that on, come back and tap Check again.
 
 Every build is signed with the same key (`signing/launcher.p12`, locked with the repo secret `LAUNCHER_KEY_PASSWORD`), so a new version installs right over the old one and keeps your favorites. Without that secret the build still runs but isn't posted as a release.
 

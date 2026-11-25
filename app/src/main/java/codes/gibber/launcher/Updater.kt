@@ -18,11 +18,33 @@ import java.net.URL
 /** Finds the newest launcher build on GitHub, downloads it and opens Android's installer. */
 object Updater {
     private const val LATEST = "https://api.github.com/repos/Gibber-codes/android-launcher/releases/latest"
+    private const val PAGE = "https://github.com/Gibber-codes/android-launcher/releases/latest"
 
     data class Release(val build: Int, val apkUrl: String)
 
     /** The newest published build, or null when GitHub can't be reached or has none. */
-    suspend fun latest(): Release? = withContext(Dispatchers.IO) {
+    suspend fun latest(): Release? = fromApi() ?: fromPage()
+
+    /**
+     * GitHub's web page for the latest release redirects to its tag (…/tag/build-58). It has no
+     * hourly limit, unlike the API, whose 60 a hour a phone network's shared address soon uses up.
+     */
+    private suspend fun fromPage(): Release? = withContext(Dispatchers.IO) {
+        try {
+            val conn = URL(PAGE).openConnection() as HttpURLConnection
+            conn.instanceFollowRedirects = false
+            conn.connectTimeout = 10_000
+            conn.readTimeout = 10_000
+            if (conn.responseCode !in 300..399) return@withContext null
+            val tag = conn.getHeaderField("Location")?.substringAfterLast("/tag/") ?: return@withContext null
+            val build = tag.removePrefix("build-").toIntOrNull() ?: return@withContext null
+            Release(build, "https://github.com/Gibber-codes/android-launcher/releases/download/$tag/gibber-launcher.apk")
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private suspend fun fromApi(): Release? = withContext(Dispatchers.IO) {
         try {
             val conn = URL(LATEST).openConnection() as HttpURLConnection
             conn.setRequestProperty("Accept", "application/vnd.github+json")
