@@ -8,7 +8,7 @@ background with slowly drifting gradient circles behind frosted glass.
 - **Search:** the apps you use most, then your games. **All ›** opens every app.
 - **Dev:** Talk to Claude (hold it to change the chat), the Ideas widget, your games and dev tools. The gear opens Gibber Settings.
 - **Mechanic:** Jobs, Parts and Mechanic tools.
-- **All apps:** swipe up anywhere, swipe down to close. Every app A to Z, with search, the alphabet down the right side, and Update.
+- **All apps:** swipe up anywhere, swipe down to close. Every app A to Z, with search and the alphabet down the right side. Back closes it too.
 - **Music screen:** the song, its artist and cover (from Spotify or any player, once notification access is on) and its controls, your speaker and headphones, and a bass boost (a switch and a strength). The boost is made on the phone, so it reaches any speaker, linked JBL speakers too; the curve is kept centred so volume stays even.
 - **Your speaker and headphones:** under Playing on, a tile for the JBL Xtreme 5 and one for the JBL Endurance, each saying Connected (with a green dot) or Not connected (`Speakers.kt`). The Xtreme 5 is known by "Gabes JBL" or "Xtreme", the Endurance by "Endurance", matched against the phone's sound outputs, and by a paired device's address once Nearby devices is allowed. A tap opens JBL One or JBL Headphones. The square Bluetooth button beside them opens Bluetooth settings, or turns Bluetooth on if it's off.
 - **Hold an app:** Move to a section, Merge, Remove from this card, Uninstall. **Hold a section's name:** edit mode, where you tick apps and remove or merge them at once.
@@ -31,7 +31,7 @@ it's merged into `main`. A commit on `main` whose message holds `[no release]` b
 
 **First install:** on your phone, open the newest release, tap `gibber-launcher.apk`, and install it. Then press Home and pick **Gibber Launcher** (Settings > Apps > Choose default apps > Home app on Samsung).
 
-**Updates after that:** a new build downloads by itself and installs when you leave the launcher, or tap **Update** in All apps (or Check in Gibber Settings). The first time, Android asks you to let Gibber Launcher install apps; turn that on, come back and tap Update again.
+**Updates after that:** a new build downloads by itself and installs when you leave the launcher, or open Gibber Settings and tap **Check** on the Launcher row. The first time, Android asks you to let Gibber Launcher install apps; turn that on, come back and tap Check again.
 
 Every build is signed with the same key (`signing/launcher.p12`, locked with the repo secret `LAUNCHER_KEY_PASSWORD`), so a new version installs right over the old one and keeps your favorites. Without that secret the build still runs but isn't posted as a release.
 

@@ -269,7 +269,6 @@ fun LauncherApp(
                     onFavoritesChange = ::saveFavorites,
                     onClose = { drawerOpen = false },
                     onAppsChanged = onAppsChanged,
-                    resumes = resumes,
                     seenBuild = prefs.seenBuild,
                     onAskMove = { moving = it },
                 )

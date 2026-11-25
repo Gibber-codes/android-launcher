@@ -56,7 +56,7 @@ private sealed class DrawerLine(val key: String) {
     class App(val app: AppEntry) : DrawerLine(app.key)
 }
 
-/** All apps: every app A to Z, with search, the Update button and the alphabet down the right side. Swipe down to close. */
+/** All apps: every app A to Z, with search and the alphabet down the right side. Swipe down or Back to close. */
 @Composable
 fun AppDrawer(
     apps: List<AppEntry>,
@@ -64,7 +64,6 @@ fun AppDrawer(
     onFavoritesChange: (List<String>) -> Unit,
     onClose: () -> Unit,
     onAppsChanged: () -> Unit = {},
-    resumes: Int = 0,
     seenBuild: Int = 0,
     onAskMove: (AppEntry) -> Unit = {},
 ) {
@@ -130,10 +129,6 @@ fun AppDrawer(
             verticalArrangement = Arrangement.spacedBy(14.dp),
             modifier = Modifier.fillMaxSize().systemBarsPadding().padding(start = 22.dp, top = 16.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 22.dp)) {
-                Box(Modifier.weight(1f)) { BackLink("Your apps", onClose) }
-                UpdateButton(resumes = resumes)
-            }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
