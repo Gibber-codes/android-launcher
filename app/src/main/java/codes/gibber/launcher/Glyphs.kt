@@ -19,7 +19,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /** The design's line icons, drawn on a 24-unit square like its SVGs. */
-enum class Glyphs { Back, Forward, Down, Search, Gear, Play, Pause, Prev, Next, Mic, Bulb, Speaker, Check, Plus, Code, Swatch, Move, Merge, Remove, Trash }
+enum class Glyphs { Back, Forward, Down, Search, Gear, Play, Pause, Prev, Next, Mic, Bulb, Speaker, Headphones, Check, Plus, Code, Swatch, Move, Merge, Remove, Trash }
 
 @Composable
 fun Glyph(g: Glyphs, size: Dp, color: Color, modifier: Modifier = Modifier) {
@@ -93,6 +93,11 @@ fun DrawScope.drawGlyph(g: Glyphs, color: Color) {
             drawRoundRect(color, Offset(6 * u, 3 * u), Size(12 * u, 18 * u), androidx.compose.ui.geometry.CornerRadius(2 * u), style = line)
             drawCircle(color, radius = 3.5f * u, center = Offset(12 * u, 14 * u), style = line)
             drawCircle(color, radius = 1f * u, center = Offset(12 * u, 7 * u))
+        }
+        Glyphs.Headphones -> {
+            drawArc(color, 180f, 180f, false, Offset(4 * u, 4 * u), Size(16 * u, 16 * u), style = line)
+            drawRoundRect(color, Offset(3 * u, 12 * u), Size(5 * u, 8 * u), androidx.compose.ui.geometry.CornerRadius(1.5f * u), style = line)
+            drawRoundRect(color, Offset(16 * u, 12 * u), Size(5 * u, 8 * u), androidx.compose.ui.geometry.CornerRadius(1.5f * u), style = line)
         }
         Glyphs.Check -> stroke(p(5f, 12.5f, 10f, 17f, 19f, 7f))
         Glyphs.Plus -> { stroke(p(12f, 5f, 12f, 19f)); stroke(p(5f, 12f, 19f, 12f)) }

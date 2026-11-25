@@ -6,29 +6,24 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.media.audiofx.AudioEffect
 import android.media.audiofx.Equalizer
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -39,23 +34,20 @@ import kotlin.math.ln
 import kotlin.math.roundToInt
 
 /**
- * The launcher's own equalizer: seven sliders from 60 Hz to 15 kHz. Android gives a phone a few
- * bands of its own (often five); each of those follows the sliders' curve at its own pitch. The
- * curve is moved up or down so its middle stays at 0 dB, so turning it on doesn't change how loud
- * the music is. It runs on the phone's whole output (session 0) and on each player that hands the
- * launcher its sound; Android doesn't promise either takes effect.
+ * The launcher's bass boost: a switch and a strength. It shapes the phone's own sound before it
+ * leaves, so it reaches whatever plays it (a speaker, two linked speakers, headphones), unlike a
+ * speaker's own equalizer. Android's BassBoost effect is missing on many phones, so this lifts the
+ * low bands of the phone's equalizer instead, and moves the whole curve down so its middle stays
+ * at 0 dB: turning it on doesn't make the music louder. It runs on the phone's whole output
+ * (session 0) and on each player that hands the launcher its sound; Android doesn't promise
+ * either takes effect.
  */
 object Eq {
-    /** The sliders' pitches, in hertz. */
-    val PITCHES = intArrayOf(60, 150, 400, 1000, 2400, 6000, 15000)
-    val NAMES = listOf("60", "150", "400", "1k", "2.4k", "6k", "15k")
-    const val TOP_DB = 6
-
-    val PRESETS = linkedMapOf(
-        "Bass boost" to listOf(5, 4, 2, 0, 0, 0, 0),
-        "Vocal" to listOf(-2, -1, 1, 3, 3, 1, 0),
-        "Flat" to listOf(0, 0, 0, 0, 0, 0, 0),
-    )
+    /** The most the bass is lifted, in dB, at full strength. */
+    const val TOP_DB = 8f
+    /** Full lift up to here, in hertz, easing to none by [EASE_TO]. */
+    private const val FULL_TO = 120
+    private const val EASE_TO = 500
 
     private val bySession = mutableMapOf<Int, Equalizer>()
     private var started = false
@@ -64,11 +56,8 @@ object Eq {
     private var centres = IntArray(0)
 
     var on by mutableStateOf(false)
-    /** The seven sliders, in dB. */
-    val levels = mutableStateListOf(0, 0, 0, 0, 0, 0, 0)
-    /** "Custom", or the preset in use. */
-    var preset by mutableStateOf("Custom")
-    private var custom = List(7) { 0 }
+    /** 0 to 1. */
+    var strength by mutableFloatStateOf(0.5f)
     var problem by mutableStateOf<String?>(null)
     var ready by mutableIntStateOf(0)
 
@@ -76,10 +65,8 @@ object Eq {
         if (started) return
         started = true
         val sp = context.getSharedPreferences("eq", Context.MODE_PRIVATE)
-        on = sp.getBoolean("on", false)
-        custom = sp.getString("custom", null)?.split(",")?.mapNotNull { it.toIntOrNull() }?.takeIf { it.size == 7 } ?: List(7) { 0 }
-        preset = sp.getString("preset", "Custom") ?: "Custom"
-        (PRESETS[preset] ?: custom).forEachIndexed { i, v -> levels[i] = v }
+        on = sp.getBoolean("bass", false)
+        strength = sp.getFloat("strength", 0.5f).coerceIn(0f, 1f)
         attach(0, "the whole phone")
         applyAll()
         val filter = IntentFilter().apply {
@@ -117,21 +104,18 @@ object Eq {
         }
     }
 
-    /** The sliders' curve at one pitch, in dB, read straight across in octaves. */
-    private fun curveAt(hz: Int): Float {
-        val x = ln(hz.coerceIn(PITCHES.first(), PITCHES.last()).toFloat())
-        for (i in 0 until PITCHES.size - 1) {
-            val a = ln(PITCHES[i].toFloat())
-            val b = ln(PITCHES[i + 1].toFloat())
-            if (x <= b) return levels[i] + (levels[i + 1] - levels[i]) * ((x - a) / (b - a))
-        }
-        return levels.last().toFloat()
+    /** How much one pitch is lifted, in dB: all of it in the bass, easing off by 500 Hz. */
+    private fun liftAt(hz: Int): Float {
+        val top = TOP_DB * strength
+        if (hz <= FULL_TO) return top
+        if (hz >= EASE_TO) return 0f
+        return top * ((ln(EASE_TO.toFloat()) - ln(hz.toFloat())) / (ln(EASE_TO.toFloat()) - ln(FULL_TO.toFloat())))
     }
 
     /** What each of the phone's bands is set to, in millibels, with the middle kept at 0 dB. */
     private fun bandLevels(): List<Int> {
         if (bands == 0) return emptyList()
-        val raw = centres.map { curveAt(it) }
+        val raw = centres.map { liftAt(it) }
         val middle = raw.average().toFloat()
         return raw.map { ((it - middle) * 100f).roundToInt().coerceIn(range) }
     }
@@ -146,110 +130,57 @@ object Eq {
         }
     }
 
-    fun set(context: Context, band: Int, db: Int) {
-        if (band !in levels.indices) return
-        levels[band] = db.coerceIn(-TOP_DB, TOP_DB)
-        preset = "Custom"
-        custom = levels.toList()
-        applyAll()
-        save(context)
-    }
-
-    fun pick(context: Context, name: String) {
-        preset = name
-        (PRESETS[name] ?: custom).forEachIndexed { i, v -> levels[i] = v }
-        applyAll()
-        save(context)
-    }
-
     fun turn(context: Context, value: Boolean) {
         on = value
         applyAll()
         save(context)
     }
 
+    fun setStrength(context: Context, value: Float) {
+        strength = value.coerceIn(0f, 1f)
+        applyAll()
+        save(context)
+    }
+
     private fun save(context: Context) {
         context.getSharedPreferences("eq", Context.MODE_PRIVATE).edit()
-            .putBoolean("on", on)
-            .putString("preset", preset)
-            .putString("custom", custom.joinToString(","))
+            .putBoolean("bass", on)
+            .putFloat("strength", strength)
             .apply()
     }
 }
 
-/** The equalizer as the music screen shows it: the switch, presets and seven sliders. */
+/** The bass boost as the music screen shows it: the switch, then how strong. */
 @Composable
-fun EqualizerPanel() {
+fun BassPanel() {
     val context = LocalContext.current
     LaunchedEffect(Unit) { Eq.start(context) }
     Eq.ready
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Head("Equalizer", Modifier.weight(1f))
+            Head("Bass boost", Modifier.weight(1f))
             PillSwitch(Eq.on) { Eq.turn(context, it) }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            (listOf("Custom") + Eq.PRESETS.keys).forEach { name ->
-                Text(
-                    name,
-                    color = Color.White,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    modifier = Modifier
-                        .frost(hi = Eq.preset == name)
-                        .pointerInput(name) { detectTapGestures { Eq.pick(context, name) } }
-                        .padding(horizontal = 10.dp, vertical = 5.dp),
-                )
-            }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Strength", color = if (Eq.on) Color.White else Dark.W40, fontSize = 13.sp)
+            Box(
+                Modifier
+                    .weight(1f)
+                    .height(28.dp)
+                    .pointerInput(Unit) { detectTapGestures { Eq.setStrength(context, it.x / size.width) } }
+                    .pointerInput(Unit) {
+                        detectHorizontalDragGestures { change, _ -> Eq.setStrength(context, change.position.x / size.width) }
+                    },
+                contentAlignment = Alignment.CenterStart,
+            ) { Bar(Eq.strength, Modifier.fillMaxWidth()) }
+            Text(
+                "+${(Eq.TOP_DB * Eq.strength).roundToInt()} dB",
+                color = if (Eq.on) Color.White else Dark.W40,
+                fontFamily = Dark.Mono,
+                fontSize = 11.sp,
+            )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            Eq.levels.forEachIndexed { i, db ->
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(if (db > 0) "+$db" else "$db", color = Dark.W62, fontFamily = Dark.Mono, fontSize = 10.sp)
-                    EqSlider(db) { Eq.set(context, i, it) }
-                    Text(Eq.NAMES[i], color = Color.White, fontFamily = Dark.Mono, fontSize = 10.sp)
-                }
-            }
-        }
-        Text("Volume stays even when you move the sliders", color = Dark.W40, fontSize = 11.sp)
+        Text("Shaped on the phone, so it reaches any speaker or headphones. Volume stays even.", color = Dark.W40, fontSize = 11.sp)
         Eq.problem?.let { Text(it, color = Dark.Research, fontSize = 11.sp) }
     }
-}
-
-/** One upright slider: a thin track, the 0 dB line, a red-to-blue fill and a white knob. */
-@Composable
-private fun EqSlider(db: Int, onChange: (Int) -> Unit) {
-    fun dbAt(y: Float, h: Float): Int =
-        (Eq.TOP_DB - (y / h) * 2 * Eq.TOP_DB).roundToInt().coerceIn(-Eq.TOP_DB, Eq.TOP_DB)
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .height(96.dp)
-            .pointerInput(Unit) { detectTapGestures { onChange(dbAt(it.y, size.height.toFloat())) } }
-            .pointerInput(Unit) {
-                detectVerticalDragGestures { change, _ -> onChange(dbAt(change.position.y, size.height.toFloat())) }
-            }
-            .drawBehind {
-                val cx = size.width / 2f
-                val mid = size.height / 2f
-                val y = mid - (db / Eq.TOP_DB.toFloat()) * mid
-                drawLine(Color.White.copy(alpha = 0.16f), Offset(cx, 0f), Offset(cx, size.height), strokeWidth = 2.dp.toPx())
-                drawLine(Color.White.copy(alpha = 0.3f), Offset(size.width * 0.3f, mid), Offset(size.width * 0.7f, mid), strokeWidth = 1.dp.toPx())
-                val top = minOf(y, mid)
-                val h = kotlin.math.abs(mid - y)
-                if (h > 0f) {
-                    drawRect(
-                        Brush.verticalGradient(listOf(Dark.Red, Dark.Blue), startY = top, endY = top + h),
-                        topLeft = Offset(cx - 2.dp.toPx(), top),
-                        size = Size(4.dp.toPx(), h),
-                    )
-                }
-                drawCircle(Color.Black.copy(alpha = 0.3f), radius = 10.dp.toPx(), center = Offset(cx, y + 1.dp.toPx()))
-                drawCircle(Color.White, radius = 9.dp.toPx(), center = Offset(cx, y))
-            },
-    )
 }

@@ -248,8 +248,8 @@ fun TapGlyph(g: Glyphs, size: Dp, color: Color = Color.White, onTap: () -> Unit)
 }
 
 /**
- * The music screen: the song, its controls, the speaker it plays on with its volume, and the
- * equalizer. Swipe down or press Back to close it.
+ * The music screen: the song, its controls, the speaker it plays on with its volume, your JBL
+ * speaker and headphones, and the bass boost. Swipe down or press Back to close it.
  */
 @Composable
 fun PlayerScreen(onClose: () -> Unit) {
@@ -339,8 +339,6 @@ fun PlayerScreen(onClose: () -> Unit) {
                         Text(speaker ?: "This phone", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1)
                         Text("Volume", color = Dark.W62, fontSize = 12.sp)
                     }
-                    val jbl = remember { Apps.load(context).firstOrNull { it.label.contains("JBL", ignoreCase = true) } }
-                    if (jbl != null) FrostButton("Open ${jbl.label}", hi = true, height = 38.dp) { Apps.launch(context, jbl) }
                 }
                 Box(
                     Modifier
@@ -361,9 +359,10 @@ fun PlayerScreen(onClose: () -> Unit) {
                         },
                     contentAlignment = Alignment.CenterStart,
                 ) { Bar(volume, Modifier.fillMaxWidth()) }
+                SpeakersPanel()
             }
 
-            EqualizerPanel()
+            BassPanel()
             Gap(24.dp)
         }
     }

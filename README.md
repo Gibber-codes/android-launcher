@@ -9,7 +9,8 @@ background with slowly drifting gradient circles behind frosted glass.
 - **Dev:** Talk to Claude (hold it to change the chat), the Ideas widget, your games and dev tools. The gear opens Gibber Settings.
 - **Mechanic:** Jobs, Parts and Mechanic tools.
 - **All apps:** swipe up anywhere, swipe down to close. Every app A to Z, with search, the alphabet down the right side, and Update.
-- **Music screen:** the song and its controls, the speaker it plays on with its volume, and a 7-slider equalizer (60 Hz to 15 kHz) with presets. The curve is kept centred so turning it on doesn't make music quieter.
+- **Music screen:** the song and its controls, the speaker it plays on with its volume, and a bass boost (a switch and a strength). The boost is made on the phone, so it reaches any speaker, linked JBL speakers too; the curve is kept centred so volume stays even.
+- **Your speaker and headphones:** under Playing on, a tile for the JBL Xtreme 5 and one for the JBL Endurance, found among paired devices by a word in their name (`Speakers.kt`). A tap turns Bluetooth on if it's off and connects; once connected, a tap opens JBL One or JBL Headphones. Android has no public way for an app to connect a paired device: the launcher tries the hidden call, and when Android refuses it opens the Bluetooth screen and says so.
 - **Hold an app:** Move to a section, Merge, Remove from this card, Uninstall. **Hold a section's name:** edit mode, where you tick apps and remove or merge them at once.
 - **Tap a game:** its pop-up, with Play, the dev server switch, Dev build, Style, Talk and older versions.
 - **Gibber Hub, Gibber Settings and Ideas** are apps in the list and open full screen.
