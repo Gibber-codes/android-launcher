@@ -10,9 +10,12 @@ class Prefs(context: Context) {
         get() = sp.getString(KEY_FAVORITES, "")!!.split("\n").filter { it.isNotBlank() }
         set(value) = sp.edit().putString(KEY_FAVORITES, value.joinToString("\n")).apply()
 
-    /** Gibber Hub's address; your PC on the home Wi-Fi until you set another. */
+    /**
+     * Gibber Hub's address; your PC on Tailscale until you set another. The PC's old home Wi-Fi
+     * address, once built in, counts as unset, since the router moved the PC off it.
+     */
     var hubUrl: String
-        get() = sp.getString(KEY_HUB_URL, "")!!.ifBlank { HOME_HUB }
+        get() = sp.getString(KEY_HUB_URL, "")!!.takeUnless { it.isBlank() || OLD_HOME in it } ?: HOME_HUB
         set(value) = sp.edit().putString(KEY_HUB_URL, value.trim()).apply()
 
     /** How often you opened each app from the launcher, for Search's Used most. */
@@ -125,7 +128,9 @@ class Prefs(context: Context) {
         const val KEY_GAMES_ADDED = "games_added"
         const val KEY_GAMES_REMOVED = "games_removed"
         const val KEY_DEV_URL = "dev_url"
-        const val HOME_HUB = "http://192.168.1.216:5175"
+        /** The PC's Tailscale address, the same on any network while Tailscale is on on the phone. */
+        const val HOME_HUB = "http://100.112.100.42:5175"
+        const val OLD_HOME = "192.168.1.216"
 
         /** Chats made for a project before you set one here; a link you save or clear replaces it. */
         val STARTING_CHATS = mapOf(

@@ -73,7 +73,7 @@ fun AddressForm(current: String, onSave: (String) -> Unit) {
         Text("Where does your hub run?", color = Color.White, fontSize = 20.sp)
         Spacer(Modifier.height(8.dp))
         Text(
-            "Type the hub's address as your phone reaches it, like http://192.168.1.20:5175 for your PC on the same Wi-Fi.",
+            "Type the hub's address as your phone reaches it, like http://100.112.100.42:5175 for your PC on Tailscale (turn Tailscale on on this phone).",
             color = Color.White.copy(alpha = 0.75f),
             fontSize = 14.sp,
         )

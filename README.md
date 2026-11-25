@@ -39,8 +39,8 @@ To go back to Samsung's home screen at any time, pick One UI Home in that same s
 
 ## Reaching Gibber Hub from the phone
 
-The hub runs on your PC (port 5175). The launcher looks for it at `http://192.168.1.216:5175`, your PC on the home Wi-Fi, until you set another address in Gibber Settings.
+The hub runs on your PC (port 5175). The launcher looks for it at `http://100.112.100.42:5175`, your PC's Tailscale address, which stays the same on any network, until you set another address in Gibber Settings. Turn Tailscale on on the phone. A hub address saved with the PC's old Wi-Fi address (192.168.1.216) is replaced by the Tailscale one.
 - **Same Wi-Fi:** the hub's server has to listen on your network, not only on localhost (`HUB_HOST=lan`), and Windows Firewall has to allow the port.
-- **From anywhere:** a private network like Tailscale, or putting the hub online, is a later step.
+- **From anywhere:** Tailscale is on both the PC and the phone, so the hub is reachable on mobile data too.
 
 **Ideas** reads `GET /api/ideas` from the hub (`{ "ideas": [{ "key", "title", "kind" }] }`, newest first). Until the hub sends it, the widget says the ideas weren't read.
