@@ -75,7 +75,7 @@ fun AppDrawer(
     }
     val lines = remember(shown, query) {
         if (query.isNotBlank()) shown.map { DrawerLine.App(it) }
-        else buildList {
+        else buildList<DrawerLine> {
             var last: Char? = null
             shown.forEach { a ->
                 if (a.letter != last) { add(DrawerLine.Letter(a.letter)); last = a.letter }

@@ -47,10 +47,10 @@ private val DarkScheme = darkColorScheme(
     background = Dark.Night,
 )
 private val Square = Shapes(
-    extraSmall = RectangleShape,
-    small = RectangleShape,
-    medium = RectangleShape,
-    large = RectangleShape,
+    extraSmall = RoundedCornerShape(0.dp),
+    small = RoundedCornerShape(0.dp),
+    medium = RoundedCornerShape(0.dp),
+    large = RoundedCornerShape(0.dp),
     extraLarge = RoundedCornerShape(0.dp),
 )
 
@@ -206,6 +206,8 @@ fun LauncherApp(
         BackHandler(enabled = drawerOpen) { drawerOpen = false }
 
         val cells = remember(apps, groups, moved, hubProjects) { Groups.cells(apps, groups, moved, hubProjects) }
+        // Kept the same across redraws, so a swipe under way isn't restarted.
+        val openDrawer = remember { { drawerOpen = true } }
         val kit = PageKit(
             apps = apps,
             cells = cells,
@@ -218,7 +220,7 @@ fun LauncherApp(
                 moved = moved + (a.key to Sections.HIDDEN)
                 prefs.sections = moved
             },
-            onOpenDrawer = { drawerOpen = true },
+            onOpenDrawer = openDrawer,
         )
 
         Box(Modifier.fillMaxSize()) {

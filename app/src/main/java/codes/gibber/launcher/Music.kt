@@ -19,6 +19,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -353,7 +354,7 @@ fun PlayerScreen(onClose: () -> Unit) {
                             detectTapGestures { set(it.x) }
                         }
                         .pointerInput(Unit) {
-                            androidx.compose.foundation.gestures.detectHorizontalDragGestures { change, _ ->
+                            detectHorizontalDragGestures { change, _ ->
                                 volume = (change.position.x / size.width).coerceIn(0f, 1f)
                                 audio.setStreamVolume(AudioManager.STREAM_MUSIC, (volume * maxVolume).toInt(), 0)
                             }

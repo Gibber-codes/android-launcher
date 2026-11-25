@@ -41,6 +41,8 @@ fun OrbBackground(modifier: Modifier = Modifier) {
         while (true) withFrameNanos { value = (it - start) / 1_000_000_000f }
     }
     Canvas(modifier.fillMaxSize()) {
+        // A gradient of no size throws, so draw nothing until the screen has one.
+        if (size.width < 2f || size.height < 2f) return@Canvas
         val t = seconds
         val s = size.width / 390f
         val w = size.width

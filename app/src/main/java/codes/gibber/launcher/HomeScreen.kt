@@ -298,7 +298,7 @@ fun HoldMenu(open: Boolean, actions: List<RowAction>, onDismiss: () -> Unit) {
             }
             DropdownMenuItem(
                 text = { Text(action.label, color = Color.White, fontSize = 14.sp) },
-                leadingIcon = glyph?.let { g -> { Glyph(g, 18.dp, Color.White) } },
+                leadingIcon = if (glyph != null) ({ Glyph(glyph, 18.dp, Color.White) }) else null,
                 onClick = { onDismiss(); action.onClick() },
             )
         }
