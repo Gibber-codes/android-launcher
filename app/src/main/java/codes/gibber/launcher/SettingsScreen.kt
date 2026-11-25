@@ -99,7 +99,7 @@ fun SettingsScreen(
                             Toast.makeText(context, "Saved", Toast.LENGTH_SHORT).show()
                         }
                     }
-                    Text("Your PC on the home Wi-Fi is 192.168.1.216:5175", color = Dark.W40, fontSize = 11.sp)
+                    Text("Your PC on Tailscale is 100.112.100.42:5175. Turn Tailscale on on this phone to reach it.", color = Dark.W40, fontSize = 11.sp)
                 }
             }
 
