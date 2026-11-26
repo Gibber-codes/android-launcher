@@ -9,7 +9,7 @@ background with slowly drifting gradient circles behind frosted glass.
 - **Dev:** Talk to Claude (hold it to change the chat), the Ideas widget, your games and dev tools. The gear opens Gibber Settings.
 - **Mechanic:** Jobs, Parts and Mechanic tools.
 - **All apps:** swipe up anywhere, swipe down to close. Every app A to Z, with search and the alphabet down the right side. Back closes it too.
-- **Music screen:** the song, its artist and cover (from Spotify or any player, once notification access is on) and its controls, an Open Spotify button, your speaker and headphones, and a bass boost (a switch and a strength). The boost is made on the phone, so it reaches any speaker, linked JBL speakers too; the curve is kept centred so volume stays even.
+- **Music screen:** the song, its artist and cover (from Spotify or any player, once notification access is on) and its controls, an Open Spotify button, your Spotify playlists two to a row with Liked Songs first (tap one to open it in Spotify), your speaker and headphones, and a bass boost (a switch and a strength). The boost is made on the phone, so it reaches any speaker, linked JBL speakers too; the curve is kept centred so volume stays even.
 - **Your speaker and headphones:** under Playing on, a tile for the JBL Xtreme 5 and one for the JBL Endurance, each saying Connected (with a green dot) or Not connected (`Speakers.kt`). The Xtreme 5 is known by "Gabes JBL" or "Xtreme", the Endurance by "Endurance", matched against the phone's sound outputs, and by a paired device's address once Nearby devices is allowed. A tap opens JBL One or JBL Headphones. The square Bluetooth button beside them opens a Bluetooth pop-up over the screen: Samsung's (paired devices and a scan) on a Galaxy, else Android's pop-up for picking where sound plays (Android 11 and later), else Bluetooth settings, or turns Bluetooth on if it's off.
 - **Hold an app:** Move to a section, Merge, Remove from this card, Uninstall. **Hold a section's name:** edit mode, where you tick apps and remove or merge them at once.
 - **Tap a game:** its pop-up, with Play, the dev server switch, Dev build, Style, Talk and older versions.
@@ -22,6 +22,15 @@ Built with Kotlin and Jetpack Compose. Android 8 or newer.
 
 - **Notification access** (the music screen offers it): shows what's playing and the number badges on Home's apps. On Android 13 and later a sideloaded app's switch is greyed out ("Restricted setting"): the music screen then says to open App info, tap ⋮, choose Allow restricted settings, and try again.
 - **Calendar** (tap "Show your events" under the month): shows your events.
+
+### Spotify playlists
+
+The music screen's **Your playlists** reads them with your own Spotify app (`Spotify.kt`). Make an app at
+[developer.spotify.com](https://developer.spotify.com/dashboard) with the **Web API**, set its redirect URI to exactly
+`http://127.0.0.1:43819/callback`, add your Spotify account under **Users Management**, then copy the app's
+**Client ID** into the field on the music screen and tap **Connect Spotify**. Spotify's sign-in opens in the
+browser; afterwards go back to the launcher. An app in Spotify's development mode only works when its owner has
+Premium. **Sign out of Spotify** under the playlists forgets the sign-in and keeps the Client ID.
 
 ## Get it on your phone
 

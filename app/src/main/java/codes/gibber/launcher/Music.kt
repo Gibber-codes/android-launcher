@@ -214,7 +214,8 @@ object NowPlaying {
         return bitmap
     }
 
-    private fun loadCover(context: Context, uri: String): Bitmap? {
+    /** Reads a picture from a web link or a content link, shrunk by halves while it stays at least [max] pixels. */
+    internal fun loadCover(context: Context, uri: String, max: Int = 512): Bitmap? {
         val u = Uri.parse(uri)
         val bytes = when (u.scheme?.lowercase()) {
             "http", "https" -> java.net.URL(uri).openConnection().run {
@@ -227,7 +228,7 @@ object NowPlaying {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
         var sample = 1
-        while (bounds.outWidth / (sample * 2) >= 512 && bounds.outHeight / (sample * 2) >= 512) sample *= 2
+        while (bounds.outWidth / (sample * 2) >= max && bounds.outHeight / (sample * 2) >= max) sample *= 2
         return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
     }
 
@@ -357,8 +358,8 @@ fun TapGlyph(g: Glyphs, size: Dp, color: Color = Color.White, onTap: () -> Unit)
 }
 
 /**
- * The music screen: the song and its controls, your JBL speaker and headphones with which one is
- * connected, and the bass boost. Swipe down or press Back to close it.
+ * The music screen: the song and its controls, your Spotify playlists, your JBL speaker and
+ * headphones with which one is connected, and the bass boost. Swipe down or press Back to close it.
  */
 @Composable
 fun PlayerScreen(onClose: () -> Unit) {
@@ -451,6 +452,8 @@ fun PlayerScreen(onClose: () -> Unit) {
                     }
                 }
             }
+
+            PlaylistsPanel()
 
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Head("Playing on")
