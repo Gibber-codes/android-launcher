@@ -379,8 +379,11 @@ internal class LogoGeo(w: Float, h: Float, pad: Float) {
 private const val Quarter = 1.5707964f
 private const val FullTurn = 6.2831855f
 private const val TurnSeconds = 0.5f
-/** How far the head tilts back, apex away, when it has risen: 35 degrees. */
-private const val HeadTilt = 0.61086524f
+/**
+ * How far the head tilts back, apex away, when it has risen: 45 degrees. Past the camera's 35.26
+ * degrees the base turns toward you, so its underside shows.
+ */
+private const val HeadTilt = 0.7853982f
 
 /**
  * The head as a square pyramid, seen from the design's isometric camera. Its base corners sit on a
