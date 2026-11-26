@@ -30,15 +30,16 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
@@ -57,17 +58,19 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.PI
+import kotlin.math.asin
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 /** The design's easing for the head's rise and the app list's slide, cubic-bezier(.2,.8,.2,1). */
 val LogoEasing = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
 private val CssEaseInOut = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)
 
-/** What moves the logo: its clock, the head's rise, the last page flick and where the eye looks. */
+/** What moves the logo: its clock, the head's rise and turn, the last page flick and where the eye looks. */
 @Stable
 class LogoState {
     var time by mutableFloatStateOf(0f)
@@ -78,15 +81,37 @@ class LogoState {
     internal var scope: CoroutineScope? = null
     private var looking: Job? = null
 
+    /** The head's turn about its vertical axis, in radians; set once a frame, so it changes only while turning. */
+    internal var yaw by mutableFloatStateOf(0f)
+    private var yawFrom = 0f
+    private var yawTo = 0f
+    private val head = HeadPose()
+
+    /** A page change: the flicker starts, and the head turns on to its next corner from wherever it is. */
+    internal fun flick() {
+        yawFrom = turnNow()
+        yawTo += Quarter
+        if (yawTo >= FullTurn) { yawTo -= FullTurn; yawFrom -= FullTurn }
+        flickAt = time
+    }
+
+    /** The turn eases out over 0.5 s from the flicker, its first two steps held so it glitches with it. */
+    internal fun turnNow(): Float {
+        var u = ((time - flickAt) / TurnSeconds).coerceIn(0f, 1f)
+        if (u < 0.3f) u = (u / 0.15f).toInt() * 0.15f
+        val v = 1f - u
+        return yawFrom + (yawTo - yawFrom) * (1f - v * v * v)
+    }
+
+    /** The head's edges for this frame's turn and tilt, built once a frame for every copy. */
+    internal fun headEdges(): Path = head.edges(yaw, HeadTilt * rise.value)
+
     /** The head's lift in logo units: the slow bob, plus the rise toward the top. */
     internal fun headY(): Float {
         var p = (time / 3.6f) % 2f
         if (p > 1f) p = 2f - p
         return -12f * CssEaseInOut.transform(p) - rise.value * (geo?.riseUnits ?: 0f)
     }
-
-    /** The head's slow turn about its vertical axis, one turn every 30 seconds. */
-    internal fun turn(): Float = cos(2f * PI.toFloat() * time / 30f)
 
     /** Turns the pupil toward a point on the screen, then lets it drift back. */
     fun look(at: Offset) {
@@ -130,9 +155,10 @@ fun Modifier.logoTaps(state: LogoState, enabled: Boolean): Modifier = pointerInp
 /**
  * The home screen's background: the GibberCodes logo along the bottom under a slight dark glass, as
  * in the design. Its red and blue copies jump together in small steps and flicker apart when the page
- * changes; the head bobs, turns slowly, rises toward the top while the app list is open, and its eye
- * looks toward a tap. Each moving part is its own layer, drawn once, so a frame only moves layers.
- * The clock runs only while the launcher is in front and nothing covers home; otherwise it stands still.
+ * changes; the head bobs, turns on by one corner with each flicker, rises and tilts back toward the top
+ * while the app list is open, and its eye looks toward a tap. Each moving part is its own layer, drawn
+ * once, so a frame only moves layers; only the head's edges are drawn again, and only while it turns or
+ * tilts. The clock runs only while the launcher is in front and nothing covers home; otherwise it stands still.
  */
 @Composable
 fun LogoBackground(state: LogoState, page: Int, raised: Boolean, covered: Boolean, modifier: Modifier = Modifier) {
@@ -153,9 +179,10 @@ fun LogoBackground(state: LogoState, page: Int, raised: Boolean, covered: Boolea
         while (true) {
             withFrameNanos { now ->
                 var t = state.time + ((now - last) / 1_000_000_000f).coerceAtMost(0.1f)
-                // 1260 s holds a whole number of every loop (0.7, 7.2 and 30 s), so the wrap can't be seen.
+                // 1260 s holds a whole number of every loop (0.7 and 7.2 s), so the wrap can't be seen.
                 if (t > 1260f) { t -= 1260f; state.flickAt -= 1260f }
                 state.time = t
+                state.yaw = state.turnNow()
                 last = now
             }
         }
@@ -165,7 +192,7 @@ fun LogoBackground(state: LogoState, page: Int, raised: Boolean, covered: Boolea
     }
     val lastPage = remember { intArrayOf(page) }
     LaunchedEffect(page) {
-        if (page != lastPage[0]) state.flickAt = state.time
+        if (page != lastPage[0]) state.flick()
         lastPage[0] = page
     }
     val scope = rememberCoroutineScope()
@@ -270,23 +297,25 @@ private fun LogoCopy(geo: LogoGeo, state: LogoState, ink: Ink, glow: Boolean = f
                 }
             }
     ) {
-        val pivot = geo.pivot(ink.dx)
         Box(
             Modifier
                 .fillMaxSize()
-                .graphicsLayer {
-                    translationY = state.headY() * geo.k
-                    scaleX = state.turn()
-                    transformOrigin = pivot
-                }
+                .graphicsLayer { translationY = state.headY() * geo.k }
                 .drawWithCache {
                     val thick = Stroke(18f, cap = StrokeCap.Round, join = StrokeJoin.Round)
                     val glows = GlowStrokes()
                     onDrawBehind {
+                        // Reads the turn and the tilt, so only this layer is drawn again when they change.
+                        val edges = state.headEdges()
                         inLogo(geo, ink.dx) {
                             translate(top = -46f) {
-                                if (glow) drawGlow(LogoArt.head, ink.color, glows.thickWide, glows.thickNear)
-                                else drawPath(LogoArt.head, ink.color, style = thick)
+                                // The eye floats in front: no edge shows through it.
+                                clipPath(LogoArt.eye, ClipOp.Difference) {
+                                    if (glow) drawGlow(edges, ink.color, glows.thickWide, glows.thickNear)
+                                    else drawPath(edges, ink.color, style = thick)
+                                }
+                                if (glow) drawGlow(LogoArt.eye, ink.color, glows.thickWide, glows.thickNear)
+                                else drawPath(LogoArt.eye, ink.color, style = thick)
                             }
                         }
                     }
@@ -298,8 +327,7 @@ private fun LogoCopy(geo: LogoGeo, state: LogoState, ink: Ink, glow: Boolean = f
                         .fillMaxSize()
                         .graphicsLayer {
                             val e = state.eye.value
-                            // Past a quarter turn the head shows its back, so the look is mirrored to keep its aim.
-                            translationX = e.x * geo.k * (if (state.turn() < 0f) -1f else 1f)
+                            translationX = e.x * geo.k
                             translationY = e.y * geo.k
                         }
                         .drawWithCache {
@@ -335,7 +363,7 @@ private fun DrawScope.inLogo(geo: LogoGeo, dx: Float, block: DrawScope.() -> Uni
 }
 
 /** Where the logo sits: 16 dp in from the sides and the bottom, as wide as that leaves. */
-internal class LogoGeo(private val w: Float, h: Float, pad: Float) {
+internal class LogoGeo(w: Float, h: Float, pad: Float) {
     val k = min((w - 2f * pad) / 402f, (h - 2f * pad) / 526f)
     val originX = (w - 402f * k) / 2f - 55f * k
     val originY = h - pad - 526f * k + 26f * k
@@ -346,8 +374,76 @@ internal class LogoGeo(private val w: Float, h: Float, pad: Float) {
     val riseUnits = max(0f, (y(-17f) - 0.077f * h) / k)
     val leftHalf: Shape = Half(x(256f), left = true)
     val rightHalf: Shape = Half(x(256f), left = false)
-    fun pivot(dx: Float) = TransformOrigin(x(256f + dx) / w, 0.5f)
 }
+
+private const val Quarter = 1.5707964f
+private const val FullTurn = 6.2831855f
+private const val TurnSeconds = 0.5f
+/** How far the head tilts back, apex away, when it has risen: 35 degrees. */
+private const val HeadTilt = 0.61086524f
+
+/**
+ * The head as a square pyramid, seen from the design's isometric camera. Its base corners sit on a
+ * circle of radius 76.56 at yaw + i quarter turns, its apex above; the camera looks down 35.26 degrees
+ * (sin = 44.2 / 76.56, so the base's half-depth is tan 30 of its half-width), and the tilt lowers that.
+ * It turns and tilts about the eye's centre (256, 145.18), so at no turn and no tilt it projects onto
+ * the design's own points: front (256, 209.8), right (332.56, 165.6), back (256, 121.4),
+ * left (179.44, 165.6), apex (256, 38). An edge is drawn when a face it borders faces the camera.
+ */
+private class HeadPose {
+    private val x = FloatArray(5)
+    private val y = FloatArray(5)
+    private val facing = BooleanArray(4)
+    private val path = Path()
+    private var lastYaw = Float.NaN
+    private var lastTilt = Float.NaN
+
+    fun edges(yaw: Float, tilt: Float): Path {
+        if (yaw == lastYaw && tilt == lastTilt) return path
+        lastYaw = yaw
+        lastTilt = tilt
+        val s = HeadR * sin(yaw)
+        val c = HeadR * cos(yaw)
+        val ca = cos(HeadElevation - tilt)
+        val sa = sin(HeadElevation - tilt)
+        corner(0, s, c, ca, sa)
+        corner(1, c, -s, ca, sa)
+        corner(2, -s, -c, ca, sa)
+        corner(3, -c, s, ca, sa)
+        x[4] = 256f
+        y[4] = 145.18f - HeadApexY * ca
+        // Screen y points down, so a face toward the camera winds the negative way.
+        for (i in 0..3) facing[i] = cross(i, (i + 1) % 4, 4) < 0f
+        val base = cross(1, 0, 3) < 0f
+        path.reset()
+        for (i in 0..3) {
+            if (facing[(i + 3) % 4] || facing[i]) line(i, 4)
+            if (facing[i] || base) line(i, (i + 1) % 4)
+        }
+        return path
+    }
+
+    private fun corner(i: Int, bx: Float, bz: Float, ca: Float, sa: Float) {
+        x[i] = 256f + bx
+        y[i] = 145.18f - (HeadBaseY * ca - bz * sa)
+    }
+
+    private fun cross(a: Int, b: Int, c: Int): Float =
+        (x[b] - x[a]) * (y[c] - y[a]) - (y[b] - y[a]) * (x[c] - x[a])
+
+    private fun line(a: Int, b: Int) {
+        path.moveTo(x[a], y[a])
+        path.lineTo(x[b], y[b])
+    }
+}
+
+private const val HeadR = 76.56f
+private const val HeadSinE = 44.2f / 76.56f
+private val HeadCosE = sqrt(1f - HeadSinE * HeadSinE)
+private val HeadElevation = asin(HeadSinE)
+/** The apex's and the base's heights above and below the eye's centre, before the camera shortens them. */
+private val HeadApexY = (127.6f - 20.42f) / HeadCosE
+private val HeadBaseY = -20.42f / HeadCosE
 
 /** The design clips each colour to one side of the logo's middle. */
 private class Half(val split: Float, val left: Boolean) : Shape {
@@ -359,12 +455,8 @@ private class Half(val split: Float, val left: Boolean) : Shape {
 private object LogoArt {
     private fun parse(vararg d: String): Path = PathParser().parsePathString(d.joinToString(" ")).toPath()
 
-    val head = parse(
-        "M256,38 L179.44,165.6 L256,209.8 L332.56,165.6 Z",
-        "M256,38 L256,93.18",
-        "M256,197.18 L256,209.8",
-        "M202,145.18 A57.37,57.37 0 0 1 310,145.18 A57.37,57.37 0 0 1 202,145.18 Z",
-    )
+    /** The head's eye; its edges are built each frame by [HeadPose]. */
+    val eye = parse("M202,145.18 A57.37,57.37 0 0 1 310,145.18 A57.37,57.37 0 0 1 202,145.18 Z")
     val pupil = parse("M256,115.54 Q268.92,145.18 256,174.82 Q243.08,145.18 256,115.54 Z")
     val base = parse(
         "M179.44,221.6 L256,265.8",
