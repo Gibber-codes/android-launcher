@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -19,7 +20,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /** The design's line icons, drawn on a 24-unit square like its SVGs. */
-enum class Glyphs { Back, Forward, Down, Search, Gear, Play, Pause, Prev, Next, Mic, Bulb, Speaker, Headphones, Bluetooth, Check, Plus, Code, Swatch, Move, Merge, Remove, Trash }
+enum class Glyphs { Back, Forward, Down, Search, Gear, Play, Pause, Prev, Next, Mic, Bulb, Xtreme, Earbuds, Volume, Bluetooth, Check, Plus, Code, Swatch, Move, Merge, Remove, Trash }
 
 @Composable
 fun Glyph(g: Glyphs, size: Dp, color: Color, modifier: Modifier = Modifier) {
@@ -89,15 +90,35 @@ fun DrawScope.drawGlyph(g: Glyphs, color: Color) {
             }
             stroke(bulb)
         }
-        Glyphs.Speaker -> {
-            drawRoundRect(color, Offset(6 * u, 3 * u), Size(12 * u, 18 * u), androidx.compose.ui.geometry.CornerRadius(2 * u), style = line)
-            drawCircle(color, radius = 3.5f * u, center = Offset(12 * u, 14 * u), style = line)
-            drawCircle(color, radius = 1f * u, center = Offset(12 * u, 7 * u))
+        // The JBL Xtreme 5 face on: a pill body, its two strap posts, the - > + strip, a row of grille, the foot.
+        Glyphs.Xtreme -> {
+            drawRoundRect(color, Offset(2 * u, 7.5f * u), Size(20 * u, 10.5f * u), CornerRadius(5.25f * u), style = line)
+            stroke(p(5f, 8f, 5f, 5.2f, 7.6f, 5.2f, 7.6f, 7.5f))
+            stroke(p(19f, 8f, 19f, 5.2f, 16.4f, 5.2f, 16.4f, 7.5f))
+            val fine = Stroke(width = 1.1f * u, cap = StrokeCap.Round)
+            drawPath(p(8.8f, 10.5f, 10.2f, 10.5f), color, style = fine)
+            fill(p(11.3f, 9.6f, 12.9f, 10.5f, 11.3f, 11.4f, close = true))
+            drawPath(p(14f, 10.5f, 15.6f, 10.5f), color, style = fine)
+            drawPath(p(14.8f, 9.7f, 14.8f, 11.3f), color, style = fine)
+            for (x in listOf(6.5f, 9.25f, 12f, 14.75f, 17.5f)) drawCircle(color, radius = 0.75f * u, center = Offset(x * u, 14.4f * u))
+            stroke(p(8.5f, 18f, 9f, 20.2f, 15f, 20.2f, 15.5f, 18f))
         }
-        Glyphs.Headphones -> {
-            drawArc(color, 180f, 180f, false, Offset(4 * u, 4 * u), Size(16 * u, 16 * u), style = line)
-            drawRoundRect(color, Offset(3 * u, 12 * u), Size(5 * u, 8 * u), androidx.compose.ui.geometry.CornerRadius(1.5f * u), style = line)
-            drawRoundRect(color, Offset(16 * u, 12 * u), Size(5 * u, 8 * u), androidx.compose.ui.geometry.CornerRadius(1.5f * u), style = line)
+        // One JBL Endurance Peak 3 from the side: a chunky bud with its ear tip, the hook arching over and down behind.
+        Glyphs.Earbuds -> {
+            drawRoundRect(color, Offset(4.5f * u, 12 * u), Size(10 * u, 8.5f * u), CornerRadius(4.25f * u), style = line)
+            drawRoundRect(color, Offset(2 * u, 14.3f * u), Size(2.5f * u, 4 * u), CornerRadius(1.2f * u), style = line)
+            drawCircle(color, radius = 0.9f * u, center = Offset(10 * u, 16.25f * u))
+            stroke(Path().apply {
+                moveTo(10.5f * u, 12.1f * u)
+                cubicTo(9.5f * u, 5.5f * u, 14 * u, 2.5f * u, 18 * u, 4.5f * u)
+                cubicTo(22 * u, 6.5f * u, 21.5f * u, 12.5f * u, 17.5f * u, 17 * u)
+            })
+        }
+        // A speaker cone and two waves, for the volume.
+        Glyphs.Volume -> {
+            stroke(p(4f, 9.5f, 8f, 9.5f, 12.5f, 5.5f, 12.5f, 18.5f, 8f, 14.5f, 4f, 14.5f, close = true))
+            drawArc(color, -45f, 90f, false, Offset(8.5f * u, 8 * u), Size(8 * u, 8 * u), style = line)
+            drawArc(color, -45f, 90f, false, Offset(5 * u, 4.5f * u), Size(15 * u, 15 * u), style = line)
         }
         // The Bluetooth rune: a spine with two arrowheads to its right, crossed at the left.
         Glyphs.Bluetooth -> stroke(p(7f, 7.5f, 17f, 16.5f, 12f, 21f, 12f, 3f, 17f, 7.5f, 7f, 16.5f))

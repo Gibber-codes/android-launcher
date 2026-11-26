@@ -8,10 +8,13 @@ import androidx.compose.ui.semantics.semantics
 import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.app.Activity
+import android.os.SystemClock
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.media.MediaRouter2
@@ -21,7 +24,8 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -67,8 +71,8 @@ data class Gear(
 
 /** Your JBL speaker and headphones: which one is connected, and opening its app. */
 object Speakers {
-    val XTREME = Gear("JBL Xtreme 5", "Xtreme 5", listOf("Gabes JBL", "Xtreme"), Glyphs.Speaker, "JBL One")
-    val ENDURANCE = Gear("JBL Endurance", "Endurance", listOf("Endurance"), Glyphs.Headphones, "JBL Headphones")
+    val XTREME = Gear("JBL Xtreme 5", "Xtreme 5", listOf("Gabes JBL", "Xtreme"), Glyphs.Xtreme, "JBL One")
+    val ENDURANCE = Gear("JBL Endurance", "Endurance", listOf("Endurance"), Glyphs.Earbuds, "JBL Headphones")
     val ALL = listOf(XTREME, ENDURANCE)
 
     private val BT_OUTPUTS = setOf(
@@ -89,18 +93,26 @@ object Speakers {
 
     fun isOn(context: Context): Boolean = try { adapter(context)?.isEnabled == true } catch (_: Throwable) { false }
 
-    /** The addresses of paired devices known by one of the gear's names, when Android lets the launcher see them. */
+    /** The phone's paired devices, when Android lets the launcher see them. */
     @SuppressLint("MissingPermission")
-    private fun pairedAddresses(context: Context, gear: Gear): Set<String> {
+    fun bonded(context: Context): Set<BluetoothDevice> {
         if (!allowed(context)) return emptySet()
-        return try {
-            adapter(context)?.bondedDevices.orEmpty()
-                .filter { d -> gear.matches(d.name) || (Build.VERSION.SDK_INT >= 30 && gear.matches(d.alias)) }
-                .mapNotNull { it.address?.uppercase()?.ifBlank { null } }
-                .toSet()
-        } catch (_: Throwable) {
-            emptySet()
-        }
+        return try { adapter(context)?.bondedDevices.orEmpty() } catch (_: Throwable) { emptySet() }
+    }
+
+    /** Whether a device is known by one of the gear's names: its own, or the one you gave it. */
+    @SuppressLint("MissingPermission")
+    fun isGear(gear: Gear, d: BluetoothDevice): Boolean = try {
+        gear.matches(d.name) || (Build.VERSION.SDK_INT >= 30 && gear.matches(d.alias))
+    } catch (_: Throwable) {
+        false
+    }
+
+    /** The addresses of paired devices known by one of the gear's names. */
+    private fun pairedAddresses(context: Context, gear: Gear): Set<String> = try {
+        bonded(context).filter { isGear(gear, it) }.mapNotNull { it.address?.uppercase()?.ifBlank { null } }.toSet()
+    } catch (_: Throwable) {
+        emptySet()
     }
 
     /**
@@ -199,22 +211,43 @@ object Speakers {
 }
 
 /**
- * The music screen's row of four, under the play controls: Spotify, your speaker, your headphones
- * and Bluetooth. The speaker and headphones light up orange while connected, and a tap opens their
- * app; Bluetooth opens a Bluetooth pop-up (Samsung's, else the one for where sound plays), or turns
- * Bluetooth on if it's off.
+ * The music screen's row of four, under the play controls: Spotify, your speaker, your earbuds
+ * and Bluetooth, then the volume. The speaker and earbuds light up orange while connected, with a
+ * battery ring when the phone knows their level, and a tap opens their app. A tap on Bluetooth
+ * switches it on or off; holding it opens the Bluetooth pop-up.
  */
 @Composable
 fun MusicButtons() {
     val context = LocalContext.current
     var connected by remember { mutableStateOf(Speakers.connected(context)) }
     var on by remember { mutableStateOf(Speakers.isOn(context)) }
+    var polled by remember { mutableStateOf(Battery.levels(context)) }
+    val heard = Battery.heard()
     var note by remember { mutableStateOf<String?>(null) }
+    var wantOff by remember { mutableStateOf(false) }
+    var askedOffAt by remember { mutableStateOf(0L) }
     val spotify = remember { NowPlaying.spotifyIcon(context) }
 
+    fun popupInstead(why: String) {
+        note = why
+        Speakers.openBluetoothPopup(context)
+    }
     val enable = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         on = Speakers.isOn(context)
         note = if (on) null else "Bluetooth is still off."
+    }
+    // Settings asks "an app wants to turn off Bluetooth". An answer this quick means no question was
+    // shown: the phone refused without asking.
+    val disable = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        on = Speakers.isOn(context)
+        note = when {
+            result.resultCode == Activity.RESULT_OK || !on -> null
+            SystemClock.elapsedRealtime() - askedOffAt < 400 -> {
+                Speakers.openBluetoothPopup(context)
+                OFF_REFUSED
+            }
+            else -> "Bluetooth is still on."
+        }
     }
     fun turnOn() {
         try {
@@ -224,27 +257,48 @@ fun MusicButtons() {
             Speakers.openBluetooth(context)
         }
     }
+    // Apps for Android 13+ can't switch Bluetooth off themselves; this asks the system (a hidden action).
+    fun turnOff() {
+        try {
+            askedOffAt = SystemClock.elapsedRealtime()
+            disable.launch(Intent("android.bluetooth.adapter.action.REQUEST_DISABLE"))
+        } catch (_: Throwable) {
+            popupInstead(OFF_REFUSED)
+        }
+    }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        if (ok) turnOn() else {
-            note = "Turning Bluetooth on from here needs Nearby devices, so the Bluetooth screen opened."
-            Speakers.openBluetooth(context)
+        when {
+            ok && wantOff -> turnOff()
+            ok -> turnOn()
+            wantOff -> popupInstead("Switching Bluetooth off from here needs Nearby devices, so the Bluetooth pop-up opened.")
+            else -> {
+                note = "Turning Bluetooth on from here needs Nearby devices, so the Bluetooth screen opened."
+                Speakers.openBluetooth(context)
+            }
         }
     }
     fun tapBluetooth() {
         note = null
+        wantOff = Speakers.isOn(context)
         val permission = Speakers.permission
         when {
-            Speakers.isOn(context) -> Speakers.openBluetoothPopup(context)
             permission != null && !Speakers.allowed(context) -> ask.launch(permission)
+            wantOff -> turnOff()
             else -> turnOn()
         }
     }
+    fun holdBluetooth() {
+        note = null
+        Speakers.openBluetoothPopup(context)
+    }
 
-    // Connections change from elsewhere: the speaker's own button, Android's Bluetooth screen.
+    // Connections and batteries change from elsewhere: the speaker's own button, Android's Bluetooth screen.
     LaunchedEffect(Unit) {
         while (true) {
             connected = Speakers.connected(context)
             on = Speakers.isOn(context)
+            polled = Battery.levels(context)
+            heard.keys.filter { it !in connected }.forEach { heard.remove(it) }
             delay(1_500)
         }
     }
@@ -259,26 +313,47 @@ fun MusicButtons() {
             }
             Speakers.ALL.forEach { gear ->
                 val lit = gear in connected
+                val battery = if (lit) polled[gear] ?: heard[gear] else null
                 SquareButton(
-                    "${gear.name}, ${if (lit) "connected" else "not connected"}",
+                    "${gear.name}, ${if (lit) "connected" else "not connected"}${battery?.let { ", battery $it%" } ?: ""}",
                     if (lit) Color(0xFFFF5A00) else Dark.Frost,
                     Modifier.weight(1f),
                     onTap = { note = Speakers.openApp(context, gear) },
-                ) { Glyph(gear.glyph, 22.dp, if (lit) Color.White else Dark.W62) }
+                ) {
+                    val colour = if (lit) Color.White else Dark.W62
+                    if (battery != null) BatteryRing(battery) { Glyph(gear.glyph, 20.dp, colour) }
+                    else Glyph(gear.glyph, 24.dp, colour)
+                }
             }
             SquareButton(
-                if (on) "Bluetooth" else "Bluetooth, off",
+                if (on) "Bluetooth, on" else "Bluetooth, off",
                 if (on) Dark.FrostHi else Dark.Frost,
                 Modifier.weight(1f),
                 onTap = ::tapBluetooth,
-            ) { Glyph(Glyphs.Bluetooth, 22.dp, if (on) Color.White else Dark.W62) }
+                tapLabel = if (on) "switch Bluetooth off" else "switch Bluetooth on",
+                onHold = ::holdBluetooth,
+                holdLabel = "open the Bluetooth menu",
+            ) { Glyph(Glyphs.Bluetooth, 22.dp, if (on) Color.White else Dark.W40) }
         }
+        VolumeRow { note = it }
         note?.let { Text(it, color = Dark.W62, fontSize = 11.sp) }
     }
 }
 
+private const val OFF_REFUSED = "Android didn't let the launcher switch Bluetooth off, so the Bluetooth pop-up opened."
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun SquareButton(label: String, fill: Color, modifier: Modifier, onTap: () -> Unit, icon: @Composable () -> Unit) {
+private fun SquareButton(
+    label: String,
+    fill: Color,
+    modifier: Modifier,
+    onTap: () -> Unit,
+    tapLabel: String? = null,
+    onHold: (() -> Unit)? = null,
+    holdLabel: String? = null,
+    icon: @Composable () -> Unit,
+) {
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
@@ -286,6 +361,12 @@ private fun SquareButton(label: String, fill: Color, modifier: Modifier, onTap: 
             .clip(RoundedCornerShape(14.dp))
             .background(fill)
             .semantics { contentDescription = label }
-            .clickable(role = Role.Button, onClick = onTap),
+            .combinedClickable(
+                role = Role.Button,
+                onClickLabel = tapLabel,
+                onLongClick = onHold,
+                onLongClickLabel = holdLabel,
+                onClick = onTap,
+            ),
     ) { icon() }
 }
