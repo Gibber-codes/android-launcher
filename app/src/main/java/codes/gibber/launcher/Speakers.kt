@@ -1,5 +1,10 @@
 package codes.gibber.launcher
 
+import androidx.compose.foundation.Image
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+
 import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
@@ -194,16 +199,18 @@ object Speakers {
 }
 
 /**
- * Your speaker and headphones under Playing on, each saying whether it's connected; a tap opens
- * its app. Beside them, the Bluetooth button: a Bluetooth pop-up (Samsung's, else the one for where
- * sound plays), or turning Bluetooth on if it's off.
+ * The music screen's row of four, under the play controls: Spotify, your speaker, your headphones
+ * and Bluetooth. The speaker and headphones light up orange while connected, and a tap opens their
+ * app; Bluetooth opens a Bluetooth pop-up (Samsung's, else the one for where sound plays), or turns
+ * Bluetooth on if it's off.
  */
 @Composable
-fun SpeakersPanel() {
+fun MusicButtons() {
     val context = LocalContext.current
     var connected by remember { mutableStateOf(Speakers.connected(context)) }
     var on by remember { mutableStateOf(Speakers.isOn(context)) }
     var note by remember { mutableStateOf<String?>(null) }
+    val spotify = remember { NowPlaying.spotifyIcon(context) }
 
     val enable = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         on = Speakers.isOn(context)
@@ -242,18 +249,28 @@ fun SpeakersPanel() {
         }
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.height(IntrinsicSize.Min)) {
-            Speakers.ALL.forEach { gear ->
-                GearTile(gear, gear in connected, Modifier.weight(1f).fillMaxHeight()) { note = Speakers.openApp(context, gear) }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            SquareButton("Open Spotify", Dark.Frost, Modifier.weight(1f), onTap = {
+                note = if (NowPlaying.openSpotify(context)) null else "Spotify couldn't be opened."
+            }) {
+                if (spotify != null) Image(spotify, contentDescription = null, modifier = Modifier.size(30.dp))
+                else Glyph(Glyphs.Play, 22.dp, Color.White)
             }
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .width(56.dp)
-                    .fillMaxHeight()
-                    .frost(hi = on)
-                    .clickable { tapBluetooth() },
+            Speakers.ALL.forEach { gear ->
+                val lit = gear in connected
+                SquareButton(
+                    "${gear.name}, ${if (lit) "connected" else "not connected"}",
+                    if (lit) Color(0xFFFF5A00) else Dark.Frost,
+                    Modifier.weight(1f),
+                    onTap = { note = Speakers.openApp(context, gear) },
+                ) { Glyph(gear.glyph, 22.dp, if (lit) Color.White else Dark.W62) }
+            }
+            SquareButton(
+                if (on) "Bluetooth" else "Bluetooth, off",
+                if (on) Dark.FrostHi else Dark.Frost,
+                Modifier.weight(1f),
+                onTap = ::tapBluetooth,
             ) { Glyph(Glyphs.Bluetooth, 22.dp, if (on) Color.White else Dark.W62) }
         }
         note?.let { Text(it, color = Dark.W62, fontSize = 11.sp) }
@@ -261,33 +278,14 @@ fun SpeakersPanel() {
 }
 
 @Composable
-private fun GearTile(gear: Gear, connected: Boolean, modifier: Modifier, onTap: () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+private fun SquareButton(label: String, fill: Color, modifier: Modifier, onTap: () -> Unit, icon: @Composable () -> Unit) {
+    Box(
+        contentAlignment = Alignment.Center,
         modifier = modifier
-            .frost(hi = connected)
-            .clickable(onClick = onTap)
-            .padding(10.dp),
-    ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(if (connected) Color(0xFFFF5A00) else Dark.FrostHi),
-        ) { Glyph(gear.glyph, 18.dp, Color.White) }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(gear.short, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                if (connected) Dot(Dark.Green, 6.dp)
-                Text(
-                    if (connected) "Connected" else "Not connected",
-                    color = if (connected) Color.White else Dark.W62,
-                    fontSize = 11.sp,
-                    maxLines = 1,
-                )
-            }
-        }
-    }
+            .height(56.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(fill)
+            .semantics { contentDescription = label }
+            .clickable(role = Role.Button, onClick = onTap),
+    ) { icon() }
 }
