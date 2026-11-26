@@ -156,9 +156,9 @@ class LogoState {
         val dy = at.y - g.y(145.18f - 46f + headY())
         val len = hypot(dx, dy)
         if (len < 1f) return
-        val reach = min(1f, len / (120f * g.k))
-        // The eye is wide and short, so the pupil travels further sideways than up and down.
-        val target = Offset(dx / len * 12f * reach, dy / len * 3f * reach)
+        val reach = min(1f, len / (60f * g.k))
+        // The eye is wide and short, so the pupil travels further sideways than up and down; the lid cuts it off.
+        val target = Offset(dx / len * LookX * reach, dy / len * LookY * reach)
         lastLook = time
         looking?.cancel()
         looking = s.launch {
@@ -180,20 +180,20 @@ class LogoState {
     }
 
     /**
-     * Every 9 to 20 seconds, if nothing has touched the eye for a while, it glances about on its own: two
+     * Every 2 to 5 seconds, if nothing has touched the eye for a moment, it glances about on its own: two
      * to four looks at random spots, then back to the centre. A tap takes over at once. Runs only while the
      * logo does.
      */
     internal suspend fun idleGlances() {
         while (true) {
-            delay(Random.nextLong(9_000, 20_000))
-            if (looking?.isActive == true || time - lastLook in 0f..6f) continue
+            delay(Random.nextLong(2_000, 5_000))
+            if (looking?.isActive == true || time - lastLook in 0f..2.5f) continue
             val s = scope ?: continue
             val glance = s.launch {
                 repeat(Random.nextInt(2, 5)) {
                     val a = Random.nextFloat() * FullTurn
-                    val reach = 0.5f + Random.nextFloat() * 0.5f
-                    eye.animateTo(Offset(cos(a) * 12f * reach, sin(a) * 3f * reach), tween(160, easing = FastOutSlowInEasing))
+                    val reach = 0.6f + Random.nextFloat() * 0.4f
+                    eye.animateTo(Offset(cos(a) * LookX * reach, sin(a) * LookY * reach), tween(140, easing = FastOutSlowInEasing))
                     delay(Random.nextLong(350, 900))
                 }
                 eye.animateTo(Offset.Zero, tween(260, easing = FastOutSlowInEasing))
@@ -435,15 +435,22 @@ private fun LogoCopy(geo: LogoGeo, state: LogoState, ink: Ink, glow: Boolean = f
                 Box(
                     Modifier
                         .fillMaxSize()
-                        .graphicsLayer {
-                            val e = state.eye.value
-                            // The pupil keeps its tighter share of the head's offset as that turns.
-                            translationX = (e.x + (PupilPull - 1f) * (headOffX(state, ink) - ink.dx) + eyeFlickX(state, ink)) * geo.k
-                            translationY = (e.y + (PupilPull - 1f) * headOffY(state, ink) + eyeFlickY(state, ink)) * geo.k
-                        }
+                        // A layer of its own, so a look redraws only the pupil.
+                        .graphicsLayer()
                         .drawWithCache {
                             onDrawBehind {
-                                inLogo(geo, ink.dx * PupilPull) { translate(top = -46f) { drawPath(LogoArt.pupil, ink.color) } }
+                                val e = state.eye.value
+                                // The pupil keeps its tighter share of the head's offset as that turns.
+                                val px = e.x + (PupilPull - 1f) * (headOffX(state, ink) - ink.dx) + eyeFlickX(state, ink)
+                                val py = e.y + (PupilPull - 1f) * headOffY(state, ink) + eyeFlickY(state, ink)
+                                // Held inside the eye, so a look up or down is cut off by the lid.
+                                inLogo(geo, ink.dx) {
+                                    translate(top = -46f) {
+                                        clipPath(LogoArt.eye) {
+                                            translate(left = px + ink.dx * (PupilPull - 1f), top = py) { drawPath(LogoArt.pupil, ink.color) }
+                                        }
+                                    }
+                                }
                             }
                         }
                 )
@@ -496,6 +503,9 @@ private const val RiseTurns = 3f
 private const val SpinSplit = 1.6f
 /** The red and blue pupils sit this share of their copy's offset from the white one, tighter than the rest. */
 private const val PupilPull = 0.4f
+/** How far the pupil looks, in logo units: sideways nearly to the eye's corner, up and down well into the lid. */
+private const val LookX = 34f
+private const val LookY = 18f
 
 /**
  * The head as a square pyramid, seen from the design's isometric camera. Its base corners sit on a
