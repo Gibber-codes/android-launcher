@@ -103,8 +103,12 @@ class LogoState {
         return yawFrom + (yawTo - yawFrom) * (1f - v * v * v)
     }
 
-    /** The head's edges for this frame's turn and tilt, built once a frame for every copy. */
-    internal fun headEdges(): Path = head.edges(yaw, HeadTilt * rise.value)
+    /**
+     * The head's edges for this frame, built once a frame for every copy. It keeps its isometric view
+     * all the way up, and spins a full turn about its upright axis as it rises (back again as it sinks),
+     * settling with the rise's own easing.
+     */
+    internal fun headEdges(): Path = head.edges(yaw + FullTurn * rise.value, 0f)
 
     /** The head's lift in logo units: the slow bob, plus the rise toward the top. */
     internal fun headY(): Float {
@@ -155,10 +159,10 @@ fun Modifier.logoTaps(state: LogoState, enabled: Boolean): Modifier = pointerInp
 /**
  * The home screen's background: the GibberCodes logo along the bottom under a slight dark glass, as
  * in the design. Its red and blue copies jump together in small steps and flicker apart when the page
- * changes; the head bobs, turns on by one corner with each flicker, rises and tilts back toward the top
- * while the app list is open, and its eye looks toward a tap. Each moving part is its own layer, drawn
- * once, so a frame only moves layers; only the head's edges are drawn again, and only while it turns or
- * tilts. The clock runs only while the launcher is in front and nothing covers home; otherwise it stands still.
+ * changes; the head bobs, turns on by one corner with each flicker, spins a full turn as it rises toward
+ * the top while the app list is open, and its eye looks toward a tap. Each moving part is its own layer,
+ * drawn once, so a frame only moves layers; only the head's edges are drawn again, and only while it
+ * turns. The clock runs only while the launcher is in front and nothing covers home; otherwise it stands still.
  */
 @Composable
 fun LogoBackground(state: LogoState, page: Int, raised: Boolean, covered: Boolean, modifier: Modifier = Modifier) {
@@ -332,7 +336,7 @@ private fun LogoCopy(geo: LogoGeo, state: LogoState, ink: Ink, glow: Boolean = f
                         }
                         .drawWithCache {
                             onDrawBehind {
-                                inLogo(geo, ink.dx) { translate(top = -46f) { drawPath(LogoArt.pupil, ink.color) } }
+                                inLogo(geo, ink.dx * PupilPull) { translate(top = -46f) { drawPath(LogoArt.pupil, ink.color) } }
                             }
                         }
                 )
@@ -379,11 +383,8 @@ internal class LogoGeo(w: Float, h: Float, pad: Float) {
 private const val Quarter = 1.5707964f
 private const val FullTurn = 6.2831855f
 private const val TurnSeconds = 0.5f
-/**
- * How far the head tilts back, apex away, when it has risen: 45 degrees. Past the camera's 35.26
- * degrees the base turns toward you, so its underside shows.
- */
-private const val HeadTilt = 0.7853982f
+/** The red and blue pupils sit this share of their copy's offset from the white one, tighter than the rest. */
+private const val PupilPull = 0.4f
 
 /**
  * The head as a square pyramid, seen from the design's isometric camera. Its base corners sit on a
