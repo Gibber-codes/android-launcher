@@ -19,7 +19,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /** The design's line icons, drawn on a 24-unit square like its SVGs. */
-enum class Glyphs { Back, Forward, Down, Search, Gear, Play, Pause, Prev, Next, Mic, Bulb, Speaker, Headphones, Bluetooth, Check, Plus, Code, Swatch, Move, Merge, Remove, Trash }
+enum class Glyphs { Back, Forward, Down, Search, Gear, Play, Pause, Prev, Next, Mic, Bulb, Speaker, Headphones, Bluetooth, Check, Plus, Code, Swatch, Move, Merge, Remove, Trash, Heart }
 
 @Composable
 fun Glyph(g: Glyphs, size: Dp, color: Color, modifier: Modifier = Modifier) {
@@ -121,5 +121,15 @@ fun DrawScope.drawGlyph(g: Glyphs, color: Color) {
             stroke(p(9f, 7f, 9f, 4f, 15f, 4f, 15f, 7f))
             stroke(p(6f, 7f, 7f, 20f, 17f, 20f, 18f, 7f))
         }
+        Glyphs.Heart -> fill(Path().apply {
+            moveTo(12 * u, 20 * u)
+            cubicTo(12 * u, 20 * u, 3 * u, 14 * u, 3 * u, 8.5f * u)
+            cubicTo(3 * u, 5.5f * u, 5.5f * u, 3.5f * u, 8 * u, 3.5f * u)
+            cubicTo(10 * u, 3.5f * u, 11.3f * u, 4.7f * u, 12 * u, 6 * u)
+            cubicTo(12.7f * u, 4.7f * u, 14 * u, 3.5f * u, 16 * u, 3.5f * u)
+            cubicTo(18.5f * u, 3.5f * u, 21 * u, 5.5f * u, 21 * u, 8.5f * u)
+            cubicTo(21 * u, 14 * u, 12 * u, 20 * u, 12 * u, 20 * u)
+            close()
+        })
     }
 }
