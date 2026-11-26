@@ -135,6 +135,20 @@ object NowPlaying {
     }
 
     /** The launcher's App info, where Android 13+ keeps "Allow restricted settings" in the ⋮ menu. */
+    /** Opens Spotify; when it isn't on the phone, its Play Store page. False if neither opened. */
+    fun openSpotify(context: Context): Boolean {
+        val app = context.packageManager.getLaunchIntentForPackage(SPOTIFY)
+        val store = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$SPOTIFY"))
+        val web = Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$SPOTIFY"))
+        listOfNotNull(app, store, web).forEach { intent ->
+            try {
+                context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                return true
+            } catch (_: Exception) { }
+        }
+        return false
+    }
+
     fun openAppInfo(context: Context) {
         try {
             context.startActivity(
@@ -420,6 +434,7 @@ fun PlayerScreen(onClose: () -> Unit) {
                     ) { Glyph(if (t?.playing == true) Glyphs.Pause else Glyphs.Play, 26.dp, Color.White) }
                     TapGlyph(Glyphs.Next, 24.dp) { NowPlaying.press(context, KeyEvent.KEYCODE_MEDIA_NEXT) }
                 }
+                FrostButton("Open Spotify", Modifier.fillMaxWidth(), height = 40.dp) { NowPlaying.openSpotify(context) }
             }
 
             if (!allowed) {
