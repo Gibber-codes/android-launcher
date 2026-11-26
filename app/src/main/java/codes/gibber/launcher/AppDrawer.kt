@@ -66,6 +66,8 @@ fun AppDrawer(
     onAppsChanged: () -> Unit = {},
     seenBuild: Int = 0,
     onAskMove: (AppEntry) -> Unit = {},
+    // Off on home, where the list slides up over the launcher's own background and its logo.
+    backdrop: Boolean = true,
 ) {
     val context = LocalContext.current
     var query by remember { mutableStateOf("") }
@@ -124,7 +126,7 @@ fun AppDrawer(
                 }
             }
     ) {
-        OrbBackground()
+        if (backdrop) OrbBackground()
         Column(
             verticalArrangement = Arrangement.spacedBy(14.dp),
             modifier = Modifier.fillMaxSize().systemBarsPadding().padding(start = 22.dp, top = 16.dp),

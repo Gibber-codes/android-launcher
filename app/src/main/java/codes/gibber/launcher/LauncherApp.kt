@@ -1,6 +1,11 @@
 package codes.gibber.launcher
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -221,9 +227,16 @@ fun LauncherApp(
             onOpenDrawer = openDrawer,
         )
 
-        Box(Modifier.fillMaxSize()) {
+        val logo = rememberLogoState()
+        // A full-screen page over home hides the logo, so it stops moving.
+        val covered = playerOpen || ideasOpen || hubOpen || settingsOpen || gamePage != null
+        // The pages fade while the app list slides up over the logo, so its words stand on the logo alone.
+        val drawerShown by animateFloatAsState(if (drawerOpen) 1f else 0f, tween(420, easing = LogoEasing), label = "drawer")
+
+        Box(Modifier.fillMaxSize().logoTaps(logo, enabled = !drawerOpen && !covered)) {
             OrbBackground()
-            Column(Modifier.fillMaxSize().systemBarsPadding()) {
+            LogoBackground(logo, page = pager.currentPage, raised = drawerOpen, covered = covered)
+            Column(Modifier.fillMaxSize().graphicsLayer { alpha = 1f - drawerShown }.systemBarsPadding()) {
                 // No clock and no bar at the bottom: the tabs are the only thing along an edge.
                 TabsRow(
                     current = pager.currentPage,
@@ -257,7 +270,11 @@ fun LauncherApp(
                 }
             }
 
-            if (drawerOpen) {
+            AnimatedVisibility(
+                visible = drawerOpen,
+                enter = slideInVertically(tween(420, easing = LogoEasing)) { it },
+                exit = slideOutVertically(tween(420, easing = LogoEasing)) { it },
+            ) {
                 AppDrawer(
                     // A game with a live app shows once in the list: as the app that plays it.
                     apps = apps.filterNot { a ->
@@ -269,6 +286,7 @@ fun LauncherApp(
                     onAppsChanged = onAppsChanged,
                     seenBuild = prefs.seenBuild,
                     onAskMove = { moving = it },
+                    backdrop = false,
                 )
             }
             if (playerOpen) PlayerScreen(onClose = { playerOpen = false })
