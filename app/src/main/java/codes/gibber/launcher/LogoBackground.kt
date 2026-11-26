@@ -64,6 +64,7 @@ import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.round
+import kotlin.random.Random
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -143,7 +144,11 @@ class LogoState {
         return -12f * CssEaseInOut.transform(p) - rise.value * (geo?.riseUnits ?: 0f)
     }
 
-    /** Turns the pupil toward a point on the screen, then lets it drift back. */
+    /** When the eye last glitched back to the centre: red and blue flicker apart for a moment from then. */
+    var eyeGlitchAt by mutableFloatStateOf(-10f)
+    private var lastLook = -100f
+
+    /** Snaps the pupil onto a point on the screen, holds it there a second, then glitches back. */
     fun look(at: Offset) {
         val g = geo ?: return
         val s = scope ?: return
@@ -154,11 +159,47 @@ class LogoState {
         val reach = min(1f, len / (120f * g.k))
         // The eye is wide and short, so the pupil travels further sideways than up and down.
         val target = Offset(dx / len * 12f * reach, dy / len * 3f * reach)
+        lastLook = time
         looking?.cancel()
         looking = s.launch {
-            eye.animateTo(target, tween(250, easing = FastOutSlowInEasing))
-            delay(3_000)
-            eye.animateTo(Offset.Zero, tween(700, easing = FastOutSlowInEasing))
+            eye.animateTo(target, tween(90, easing = FastOutSlowInEasing))
+            delay(1_000)
+            glitchBack()
+        }
+    }
+
+    /** Back to the centre in three held jumps, overshooting once, while red and blue flicker. */
+    private suspend fun glitchBack() {
+        val from = eye.value
+        eyeGlitchAt = time
+        eye.snapTo(from * -0.35f)
+        delay(60)
+        eye.snapTo(from * 0.4f)
+        delay(60)
+        eye.snapTo(Offset.Zero)
+    }
+
+    /**
+     * Every 9 to 20 seconds, if nothing has touched the eye for a while, it glances about on its own: two
+     * to four looks at random spots, then back to the centre. A tap takes over at once. Runs only while the
+     * logo does.
+     */
+    internal suspend fun idleGlances() {
+        while (true) {
+            delay(Random.nextLong(9_000, 20_000))
+            if (looking?.isActive == true || time - lastLook in 0f..6f) continue
+            val s = scope ?: continue
+            val glance = s.launch {
+                repeat(Random.nextInt(2, 5)) {
+                    val a = Random.nextFloat() * FullTurn
+                    val reach = 0.5f + Random.nextFloat() * 0.5f
+                    eye.animateTo(Offset(cos(a) * 12f * reach, sin(a) * 3f * reach), tween(160, easing = FastOutSlowInEasing))
+                    delay(Random.nextLong(350, 900))
+                }
+                eye.animateTo(Offset.Zero, tween(260, easing = FastOutSlowInEasing))
+            }
+            looking = glance
+            glance.join()
         }
     }
 }
@@ -186,7 +227,8 @@ fun Modifier.logoTaps(state: LogoState, enabled: Boolean): Modifier = pointerInp
  * The home screen's background: the GibberCodes logo along the bottom under a slight dark glass, as
  * in the design. Its red and blue copies jump together in small steps and flicker apart when the page
  * changes; the head bobs, turns one corner with each flicker (its way set by the swipe's), spins three
- * fast, glitching turns as it rises toward the top while the app list is open, and its eye looks toward a tap. Each moving part is its own layer,
+ * fast, glitching turns as it rises toward the top while the app list is open, and its eye locks onto a tap
+ * for a second, glitches back, and now and then glances about on its own. Each moving part is its own layer,
  * drawn once, so a frame only moves layers; only the head's edges are drawn again, and only while it
  * turns. The clock runs only while the launcher is in front and nothing covers home; otherwise it stands still.
  */
@@ -217,6 +259,9 @@ fun LogoBackground(state: LogoState, page: Int, raised: Boolean, covered: Boolea
                 last = now
             }
         }
+    }
+    LaunchedEffect(running) {
+        if (running) state.idleGlances()
     }
     LaunchedEffect(raised) {
         state.rise.animateTo(if (raised) 1f else 0f, tween(550, easing = LogoEasing))
@@ -317,6 +362,16 @@ private fun headOffX(state: LogoState, ink: Ink): Float = ink.dx * cos(2f * stat
 
 private fun headOffY(state: LogoState, ink: Ink): Float = ink.dx * sin(2f * state.totalYaw()) * HeadSinE
 
+/** For 0.3 s after the eye glitches back, its red and blue pupils flicker apart through the flicker's steps. */
+private fun eyeStep(state: LogoState): Int {
+    val e = state.time - state.eyeGlitchAt
+    return if (e < 0f || e > 0.3f) 3 else (e / 0.075f).toInt().coerceIn(0, 3)
+}
+
+private fun eyeFlickX(state: LogoState, ink: Ink): Float = FlickX[eyeStep(state)] * ink.flick * 0.7f
+
+private fun eyeFlickY(state: LogoState, ink: Ink): Float = FlickY[eyeStep(state)] * ink.flick * 0.7f
+
 /** One copy of the logo: the base and bricks over its head, the pupil inside the head, each a layer. */
 @Composable
 private fun LogoCopy(geo: LogoGeo, state: LogoState, ink: Ink, glow: Boolean = false) {
@@ -383,8 +438,8 @@ private fun LogoCopy(geo: LogoGeo, state: LogoState, ink: Ink, glow: Boolean = f
                         .graphicsLayer {
                             val e = state.eye.value
                             // The pupil keeps its tighter share of the head's offset as that turns.
-                            translationX = (e.x + (PupilPull - 1f) * (headOffX(state, ink) - ink.dx)) * geo.k
-                            translationY = (e.y + (PupilPull - 1f) * headOffY(state, ink)) * geo.k
+                            translationX = (e.x + (PupilPull - 1f) * (headOffX(state, ink) - ink.dx) + eyeFlickX(state, ink)) * geo.k
+                            translationY = (e.y + (PupilPull - 1f) * headOffY(state, ink) + eyeFlickY(state, ink)) * geo.k
                         }
                         .drawWithCache {
                             onDrawBehind {
