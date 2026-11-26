@@ -3,6 +3,7 @@
 Your own Android home screen, with Gibber Hub built in, in the approved dark design: a night
 background with slowly drifting gradient circles behind frosted glass.
 
+- **Home background:** the animated GibberCodes logo along the bottom under a slight dark glass (`LogoBackground.kt`, drawn natively). Its red and blue jitter and flicker apart when you change page; the head bobs and turns slowly, rises toward the top while all apps are open, and its eye looks toward where you tap. It stands still while the launcher is in the background or a full-screen page covers home.
 - **Tabs along the top:** Search, Home, Dev and Mechanic. Swipe left and right between them, or tap one. No clock and no bar at the bottom.
 - **Home:** what's playing (tap it for the music screen), a month calendar that fills the page, and eight apps.
 - **Search:** the apps you use most, then your games. **All ›** opens every app.

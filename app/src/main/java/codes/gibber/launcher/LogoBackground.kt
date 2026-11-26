@@ -1,0 +1,408 @@
+package codes.gibber.launcher
+
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.findViewTreeLifecycleOwner
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.hypot
+import kotlin.math.max
+import kotlin.math.min
+
+/** The design's easing for the head's rise and the app list's slide, cubic-bezier(.2,.8,.2,1). */
+val LogoEasing = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
+private val CssEaseInOut = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)
+
+/** What moves the logo: its clock, the head's rise, the last page flick and where the eye looks. */
+@Stable
+class LogoState {
+    var time by mutableFloatStateOf(0f)
+    var flickAt by mutableFloatStateOf(-10f)
+    val rise = Animatable(0f)
+    val eye = Animatable(Offset.Zero, Offset.VectorConverter)
+    internal var geo: LogoGeo? = null
+    internal var scope: CoroutineScope? = null
+    private var looking: Job? = null
+
+    /** The head's lift in logo units: the slow bob, plus the rise toward the top. */
+    internal fun headY(): Float {
+        var p = (time / 3.6f) % 2f
+        if (p > 1f) p = 2f - p
+        return -12f * CssEaseInOut.transform(p) - rise.value * (geo?.riseUnits ?: 0f)
+    }
+
+    /** The head's slow turn about its vertical axis, one turn every 30 seconds. */
+    internal fun turn(): Float = cos(2f * PI.toFloat() * time / 30f)
+
+    /** Turns the pupil toward a point on the screen, then lets it drift back. */
+    fun look(at: Offset) {
+        val g = geo ?: return
+        val s = scope ?: return
+        val dx = at.x - g.x(256f)
+        val dy = at.y - g.y(145.18f - 46f + headY())
+        val len = hypot(dx, dy)
+        if (len < 1f) return
+        val reach = min(1f, len / (120f * g.k))
+        // The eye is wide and short, so the pupil travels further sideways than up and down.
+        val target = Offset(dx / len * 12f * reach, dy / len * 3f * reach)
+        looking?.cancel()
+        looking = s.launch {
+            eye.animateTo(target, tween(250, easing = FastOutSlowInEasing))
+            delay(3_000)
+            eye.animateTo(Offset.Zero, tween(700, easing = FastOutSlowInEasing))
+        }
+    }
+}
+
+@Composable
+fun rememberLogoState(): LogoState = remember { LogoState() }
+
+/** Watches taps for the eye without taking them, so the pages and apps get every touch as before. */
+fun Modifier.logoTaps(state: LogoState, enabled: Boolean): Modifier = pointerInput(state, enabled) {
+    if (!enabled) return@pointerInput
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        while (true) {
+            val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+            if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) break
+            if (!change.pressed) {
+                if (change.uptimeMillis - down.uptimeMillis < 400) state.look(change.position)
+                break
+            }
+        }
+    }
+}
+
+/**
+ * The home screen's background: the GibberCodes logo along the bottom under a slight dark glass, as
+ * in the design. Its red and blue copies jump together in small steps and flicker apart when the page
+ * changes; the head bobs, turns slowly, rises toward the top while the app list is open, and its eye
+ * looks toward a tap. Each moving part is its own layer, drawn once, so a frame only moves layers.
+ * The clock runs only while the launcher is in front and nothing covers home; otherwise it stands still.
+ */
+@Composable
+fun LogoBackground(state: LogoState, page: Int, raised: Boolean, covered: Boolean, modifier: Modifier = Modifier) {
+    var resumed by remember { mutableStateOf(true) }
+    val view = LocalView.current
+    DisposableEffect(view) {
+        val lifecycle = view.findViewTreeLifecycleOwner()?.lifecycle
+        val observer = LifecycleEventObserver { _, _ ->
+            resumed = lifecycle?.currentState?.isAtLeast(Lifecycle.State.RESUMED) ?: true
+        }
+        lifecycle?.addObserver(observer)
+        onDispose { lifecycle?.removeObserver(observer) }
+    }
+    val running = resumed && !covered
+    LaunchedEffect(running) {
+        if (!running) return@LaunchedEffect
+        var last = withFrameNanos { it }
+        while (true) {
+            withFrameNanos { now ->
+                var t = state.time + ((now - last) / 1_000_000_000f).coerceAtMost(0.1f)
+                // 1260 s holds a whole number of every loop (0.7, 7.2 and 30 s), so the wrap can't be seen.
+                if (t > 1260f) { t -= 1260f; state.flickAt -= 1260f }
+                state.time = t
+                last = now
+            }
+        }
+    }
+    LaunchedEffect(raised) {
+        state.rise.animateTo(if (raised) 1f else 0f, tween(550, easing = LogoEasing))
+    }
+    val lastPage = remember { intArrayOf(page) }
+    LaunchedEffect(page) {
+        if (page != lastPage[0]) state.flickAt = state.time
+        lastPage[0] = page
+    }
+    val scope = rememberCoroutineScope()
+
+    BoxWithConstraints(modifier.fillMaxSize()) {
+        val pad = with(LocalDensity.current) { 16.dp.toPx() }
+        val w = constraints.maxWidth.toFloat()
+        val h = constraints.maxHeight.toFloat()
+        val geo = remember(w, h, pad) { LogoGeo(w, h, pad) }
+        SideEffect {
+            state.geo = geo
+            state.scope = scope
+        }
+        if (w >= 2f && h >= 2f) LogoLayers(geo, state)
+    }
+}
+
+@Composable
+private fun LogoLayers(geo: LogoGeo, state: LogoState) {
+    Box(Modifier.fillMaxSize()) {
+        LogoCopy(geo, state, Ink.Red, glow = true)
+        LogoCopy(geo, state, Ink.Blue, glow = true)
+        Box(Modifier.fillMaxSize().clip(geo.leftHalf)) {
+            LogoCopy(geo, state, Ink.Blue)
+            LogoCopy(geo, state, Ink.Red)
+        }
+        Box(Modifier.fillMaxSize().clip(geo.rightHalf)) {
+            LogoCopy(geo, state, Ink.Red)
+            LogoCopy(geo, state, Ink.Blue)
+        }
+        LogoCopy(geo, state, Ink.White)
+
+        // The slight dark glass: the design's night at 38% and brightness .8, with its faint sheen.
+        Canvas(Modifier.fillMaxSize()) {
+            drawRect(Dark.Night.copy(alpha = 0.5f))
+            drawRect(
+                Brush.linearGradient(
+                    0f to Color.White.copy(alpha = 0.03f),
+                    0.38f to Color.Transparent,
+                    0.72f to Color.Transparent,
+                    1f to Color.White.copy(alpha = 0.01f),
+                    start = Offset.Zero,
+                    end = Offset(size.width, size.height),
+                )
+            )
+        }
+    }
+}
+
+/** One colour of the logo: where it sits, and whether it jumps and which way it flickers. */
+private enum class Ink(val color: Color, val dx: Float, val brickDx: Float, val jumps: Boolean, val flick: Float) {
+    Blue(Color(0xFF1A8CFF), 13f, -7.15f, true, -1f),
+    Red(Color(0xFFFF1F5A), -13f, 7.15f, true, 1f),
+    White(Color.White, 0f, 0f, false, 0f),
+}
+
+private val JumpX = floatArrayOf(0f, -2.5f, 1.5f, -1.5f, 2f)
+private val JumpY = floatArrayOf(0f, 1f, -1f, 0f, 1f)
+private val FlickX = floatArrayOf(-6f, 3f, -4f, 0f)
+private val FlickY = floatArrayOf(1f, -1f, 0f, 0f)
+
+/** The design's `step-end` keyframes: 0.7 s of jumps, and a 0.45 s flicker after a page change. */
+private fun jumpStep(t: Float) = ((t % 0.7f) / 0.7f * 5f).toInt().coerceIn(0, 4)
+
+private fun flickStep(state: LogoState): Int {
+    val e = (state.time - state.flickAt) / 0.45f
+    return when { e < 0f || e > 1f -> 3; e < 0.3f -> 0; e < 0.6f -> 1; e < 0.9f -> 2; else -> 3 }
+}
+
+private fun copyX(state: LogoState, ink: Ink): Float =
+    if (!ink.jumps) 0f else JumpX[jumpStep(state.time)] + FlickX[flickStep(state)] * ink.flick
+
+private fun copyY(state: LogoState, ink: Ink): Float =
+    if (!ink.jumps) 0f else JumpY[jumpStep(state.time)] + FlickY[flickStep(state)] * ink.flick
+
+/** One copy of the logo: the base and bricks over its head, the pupil inside the head, each a layer. */
+@Composable
+private fun LogoCopy(geo: LogoGeo, state: LogoState, ink: Ink, glow: Boolean = false) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                translationX = copyX(state, ink) * geo.k
+                translationY = copyY(state, ink) * geo.k
+            }
+            .drawWithCache {
+                val thick = Stroke(18f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                val thin = Stroke(6f, cap = StrokeCap.Round)
+                val glows = GlowStrokes()
+                onDrawWithContent {
+                    // In the design the head is drawn first and the base over it.
+                    drawContent()
+                    inLogo(geo, ink.dx) {
+                        if (glow) {
+                            drawGlow(LogoArt.base, ink.color, glows.thickWide, glows.thickNear)
+                            translate(left = ink.brickDx) { drawGlow(LogoArt.bricks, ink.color, glows.thinWide, glows.thinNear) }
+                        } else {
+                            drawPath(LogoArt.base, ink.color, style = thick)
+                            translate(left = ink.brickDx) { drawPath(LogoArt.bricks, ink.color, style = thin) }
+                        }
+                    }
+                }
+            }
+    ) {
+        val pivot = geo.pivot(ink.dx)
+        Box(
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    translationY = state.headY() * geo.k
+                    scaleX = state.turn()
+                    transformOrigin = pivot
+                }
+                .drawWithCache {
+                    val thick = Stroke(18f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                    val glows = GlowStrokes()
+                    onDrawBehind {
+                        inLogo(geo, ink.dx) {
+                            translate(top = -46f) {
+                                if (glow) drawGlow(LogoArt.head, ink.color, glows.thickWide, glows.thickNear)
+                                else drawPath(LogoArt.head, ink.color, style = thick)
+                            }
+                        }
+                    }
+                }
+        ) {
+            if (!glow) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            val e = state.eye.value
+                            // Past a quarter turn the head shows its back, so the look is mirrored to keep its aim.
+                            translationX = e.x * geo.k * (if (state.turn() < 0f) -1f else 1f)
+                            translationY = e.y * geo.k
+                        }
+                        .drawWithCache {
+                            onDrawBehind {
+                                inLogo(geo, ink.dx) { translate(top = -46f) { drawPath(LogoArt.pupil, ink.color) } }
+                            }
+                        }
+                )
+            }
+        }
+    }
+}
+
+/** The design's glow is a 6 px blur; two wider, faint strokes behind give nearly the same look for free. */
+private class GlowStrokes {
+    val thickWide = Stroke(32f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    val thickNear = Stroke(24f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    val thinWide = Stroke(18f, cap = StrokeCap.Round)
+    val thinNear = Stroke(11f, cap = StrokeCap.Round)
+}
+
+private fun DrawScope.drawGlow(path: Path, color: Color, wide: Stroke, near: Stroke) {
+    drawPath(path, color, alpha = 0.07f, style = wide)
+    drawPath(path, color, alpha = 0.12f, style = near)
+}
+
+/** Draws in the design's own units (its viewBox is 55 -26 402 526), shifted `dx` like its copies. */
+private fun DrawScope.inLogo(geo: LogoGeo, dx: Float, block: DrawScope.() -> Unit) {
+    withTransform({
+        translate(geo.originX + dx * geo.k, geo.originY)
+        scale(geo.k, geo.k, Offset.Zero)
+    }, block)
+}
+
+/** Where the logo sits: 16 dp in from the sides and the bottom, as wide as that leaves. */
+internal class LogoGeo(private val w: Float, h: Float, pad: Float) {
+    val k = min((w - 2f * pad) / 402f, (h - 2f * pad) / 526f)
+    val originX = (w - 402f * k) / 2f - 55f * k
+    val originY = h - pad - 526f * k + 26f * k
+    fun x(u: Float) = originX + u * k
+    fun y(u: Float) = originY + u * k
+
+    /** How far the head rises: its top ends near the top, where the design's ends on its 844 tall phone. */
+    val riseUnits = max(0f, (y(-17f) - 0.077f * h) / k)
+    val leftHalf: Shape = Half(x(256f), left = true)
+    val rightHalf: Shape = Half(x(256f), left = false)
+    fun pivot(dx: Float) = TransformOrigin(x(256f + dx) / w, 0.5f)
+}
+
+/** The design clips each colour to one side of the logo's middle. */
+private class Half(val split: Float, val left: Boolean) : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline =
+        Outline.Rectangle(if (left) Rect(0f, 0f, split, size.height) else Rect(split, 0f, size.width, size.height))
+}
+
+/** The design's logo paths, parsed once. */
+private object LogoArt {
+    private fun parse(vararg d: String): Path = PathParser().parsePathString(d.joinToString(" ")).toPath()
+
+    val head = parse(
+        "M256,38 L179.44,165.6 L256,209.8 L332.56,165.6 Z",
+        "M256,38 L256,93.18",
+        "M256,197.18 L256,209.8",
+        "M202,145.18 A57.37,57.37 0 0 1 310,145.18 A57.37,57.37 0 0 1 202,145.18 Z",
+    )
+    val pupil = parse("M256,115.54 Q268.92,145.18 256,174.82 Q243.08,145.18 256,115.54 Z")
+    val base = parse(
+        "M179.44,221.6 L256,265.8",
+        "M256,265.8 L332.56,221.6",
+        "M332.56,221.6 L256,177.4",
+        "M179.44,221.6 L256,177.4",
+        "M179.44,221.6 L82,384",
+        "M82,384 L256,484.46",
+        "M256,484.46 L430,384",
+        "M430,384 L332.56,221.6",
+        "M256,265.8 L256,484.46",
+    )
+    val bricks = parse(
+        "M155.08,262.2 L256,320.47",
+        "M130.72,302.8 L256,375.13",
+        "M106.36,343.4 L256,429.79",
+        "M204.96,236.33 L188.72,281.62",
+        "M230.48,251.07 L222.36,301.04",
+        "M171.9,271.91 L151.6,314.86",
+        "M205.54,291.33 L193.36,338.97",
+        "M239.18,310.76 L235.12,363.08",
+        "M172.48,326.91 L156.24,372.2",
+        "M214.24,351.02 L206.12,401",
+        "M131.3,357.8 L111,400.74",
+        "M181.18,386.6 L169,434.23",
+        "M231.06,415.4 L227,467.72",
+        "M356.92,262.2 L256,320.47",
+        "M381.28,302.8 L256,375.13",
+        "M405.64,343.4 L256,429.79",
+        "M319.8,228.97 L340.1,271.91",
+        "M294.28,243.7 L306.46,291.33",
+        "M268.76,258.43 L272.82,310.76",
+        "M323.28,281.62 L339.52,326.91",
+        "M289.64,301.04 L297.76,351.02",
+        "M360.4,314.86 L380.7,357.8",
+        "M318.64,338.97 L330.82,386.6",
+        "M276.88,363.08 L280.94,415.4",
+        "M355.76,372.2 L372,417.49",
+        "M305.88,401 L314,450.97",
+    )
+}
