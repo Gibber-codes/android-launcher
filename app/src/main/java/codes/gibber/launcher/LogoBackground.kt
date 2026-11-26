@@ -58,6 +58,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 import kotlin.math.asin
 import kotlin.math.cos
 import kotlin.math.hypot
@@ -65,6 +66,7 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
 import kotlin.math.sqrt
+import kotlin.math.tanh
 
 /** The design's easing for the head's rise and the app list's slide, cubic-bezier(.2,.8,.2,1). */
 val LogoEasing = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
@@ -117,6 +119,26 @@ class LogoState {
 
     /** True while the head rises or sinks, when red and blue split and flicker hard. */
     internal val spinning: Boolean get() = rise.isRunning
+
+    /**
+     * How fast the head is spinning, from -1 to 1 (its sign is the way it turns), smoothed: it drives the
+     * body's red and blue apart. A page turn reaches about two thirds, the spin up or down all of it.
+     */
+    internal var spin by mutableFloatStateOf(0f)
+    private var lastTotal = Float.NaN
+
+    /** Called once a frame with the frame's length, after `yaw` is set. */
+    internal fun trackSpin(dt: Float) {
+        val total = yaw + FullTurn * RiseTurns * rise.value
+        val step = total - lastTotal
+        lastTotal = total
+        // The first frame, and a turn's wrap past a whole circle, aren't motion.
+        if (dt <= 0f || step.isNaN() || abs(step) > 4f) return
+        val target = tanh(step / dt / SpinScale)
+        val s = spin + (target - spin) * min(1f, dt * 14f)
+        // Settled: stop writing, so the layers stop being redrawn.
+        spin = if (target == 0f && abs(s) < 0.002f) 0f else s
+    }
 
     /** The head's lift in logo units: the slow bob, plus the rise toward the top. */
     internal fun headY(): Float {
@@ -195,6 +217,7 @@ fun LogoBackground(state: LogoState, page: Int, raised: Boolean, covered: Boolea
                 if (t > 1260f) { t -= 1260f; state.flickAt -= 1260f }
                 state.time = t
                 state.yaw = state.turnNow()
+                state.trackSpin(((now - last) / 1_000_000_000f).coerceAtMost(0.1f))
                 last = now
             }
         }
@@ -289,6 +312,22 @@ private fun copyY(state: LogoState, ink: Ink): Float {
     return JumpY[jumpStep(state.time)] + FlickY[flickStep(state)] * ink.flick + spin
 }
 
+/**
+ * The head's spin pulls the body's red and blue apart: red the way the head turns, blue the other,
+ * up to `BodySplit` units at full speed, fluttering through the flicker's steps, then settling back.
+ */
+private fun bodyX(state: LogoState, ink: Ink): Float {
+    val s = state.spin
+    if (!ink.jumps || s == 0f) return 0f
+    return (s * BodySplit + FlickX[spinStep(state)] * abs(s) * BodyFlutter) * ink.flick
+}
+
+private fun bodyY(state: LogoState, ink: Ink): Float {
+    val s = state.spin
+    if (!ink.jumps || s == 0f) return 0f
+    return FlickY[spinStep(state)] * abs(s) * BodyFlutter * ink.flick
+}
+
 /** One copy of the logo: the base and bricks over its head, the pupil inside the head, each a layer. */
 @Composable
 private fun LogoCopy(geo: LogoGeo, state: LogoState, ink: Ink, glow: Boolean = false) {
@@ -296,8 +335,8 @@ private fun LogoCopy(geo: LogoGeo, state: LogoState, ink: Ink, glow: Boolean = f
         Modifier
             .fillMaxSize()
             .graphicsLayer {
-                translationX = copyX(state, ink) * geo.k
-                translationY = copyY(state, ink) * geo.k
+                translationX = (copyX(state, ink) + bodyX(state, ink)) * geo.k
+                translationY = (copyY(state, ink) + bodyY(state, ink)) * geo.k
             }
             .drawWithCache {
                 val thick = Stroke(18f, cap = StrokeCap.Round, join = StrokeJoin.Round)
@@ -321,7 +360,11 @@ private fun LogoCopy(geo: LogoGeo, state: LogoState, ink: Ink, glow: Boolean = f
         Box(
             Modifier
                 .fillMaxSize()
-                .graphicsLayer { translationY = state.headY() * geo.k }
+                .graphicsLayer {
+                    // The body's spin split moves the base only, so the head takes it back.
+                    translationX = -bodyX(state, ink) * geo.k
+                    translationY = (state.headY() - bodyY(state, ink)) * geo.k
+                }
                 .drawWithCache {
                     val thick = Stroke(18f, cap = StrokeCap.Round, join = StrokeJoin.Round)
                     val glows = GlowStrokes()
@@ -404,6 +447,12 @@ private const val TurnSeconds = 0.5f
 private const val RiseTurns = 3f
 /** How much harder than a page flicker red and blue split while the head spins. */
 private const val SpinSplit = 1.6f
+/** Spin speed, in radians a second, that reads as three quarters of full: a page turn sits below it. */
+private const val SpinScale = 6f
+/** How far, in logo units, the body's red and blue slide apart at full spin. */
+private const val BodySplit = 9f
+/** How hard the body's red and blue flutter at full spin, as a share of a page flicker. */
+private const val BodyFlutter = 0.8f
 /** The red and blue pupils sit this share of their copy's offset from the white one, tighter than the rest. */
 private const val PupilPull = 0.4f
 
