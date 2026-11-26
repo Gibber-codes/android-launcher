@@ -87,11 +87,16 @@ class LogoState {
     private var yawTo = 0f
     private val head = HeadPose()
 
-    /** A page change: the flicker starts, and the head turns on to its next corner from wherever it is. */
-    internal fun flick() {
+    /**
+     * A page change: the flicker starts, and the head turns on to its next corner from wherever it is.
+     * `dir` is which way: -1 swings the front corner left (a swipe to the next page, right to left), +1
+     * swings it right (back to the page before), so the head follows the finger.
+     */
+    internal fun flick(dir: Int) {
         yawFrom = turnNow()
-        yawTo += Quarter
+        yawTo += Quarter * dir
         if (yawTo >= FullTurn) { yawTo -= FullTurn; yawFrom -= FullTurn }
+        if (yawTo <= -FullTurn) { yawTo += FullTurn; yawFrom += FullTurn }
         flickAt = time
     }
 
@@ -105,10 +110,13 @@ class LogoState {
 
     /**
      * The head's edges for this frame, built once a frame for every copy. It keeps its isometric view
-     * all the way up, and spins a full turn about its upright axis as it rises (back again as it sinks),
-     * settling with the rise's own easing.
+     * all the way up, and spins three whole turns about its upright axis as it rises (back again as it
+     * sinks): fast at first, settling with the rise's own easing, while the colours glitch (`spinning`).
      */
-    internal fun headEdges(): Path = head.edges(yaw + FullTurn * rise.value, 0f)
+    internal fun headEdges(): Path = head.edges(yaw + FullTurn * RiseTurns * rise.value, 0f)
+
+    /** True while the head rises or sinks, when red and blue split and flicker hard. */
+    internal val spinning: Boolean get() = rise.isRunning
 
     /** The head's lift in logo units: the slow bob, plus the rise toward the top. */
     internal fun headY(): Float {
@@ -159,8 +167,8 @@ fun Modifier.logoTaps(state: LogoState, enabled: Boolean): Modifier = pointerInp
 /**
  * The home screen's background: the GibberCodes logo along the bottom under a slight dark glass, as
  * in the design. Its red and blue copies jump together in small steps and flicker apart when the page
- * changes; the head bobs, turns on by one corner with each flicker, spins a full turn as it rises toward
- * the top while the app list is open, and its eye looks toward a tap. Each moving part is its own layer,
+ * changes; the head bobs, turns one corner with each flicker (its way set by the swipe's), spins three
+ * fast, glitching turns as it rises toward the top while the app list is open, and its eye looks toward a tap. Each moving part is its own layer,
  * drawn once, so a frame only moves layers; only the head's edges are drawn again, and only while it
  * turns. The clock runs only while the launcher is in front and nothing covers home; otherwise it stands still.
  */
@@ -196,7 +204,7 @@ fun LogoBackground(state: LogoState, page: Int, raised: Boolean, covered: Boolea
     }
     val lastPage = remember { intArrayOf(page) }
     LaunchedEffect(page) {
-        if (page != lastPage[0]) state.flick()
+        if (page != lastPage[0]) state.flick(if (page > lastPage[0]) -1 else 1)
         lastPage[0] = page
     }
     val scope = rememberCoroutineScope()
@@ -266,11 +274,20 @@ private fun flickStep(state: LogoState): Int {
     return when { e < 0f || e > 1f -> 3; e < 0.3f -> 0; e < 0.6f -> 1; e < 0.9f -> 2; else -> 3 }
 }
 
-private fun copyX(state: LogoState, ink: Ink): Float =
-    if (!ink.jumps) 0f else JumpX[jumpStep(state.time)] + FlickX[flickStep(state)] * ink.flick
+/** While the head spins up or down, red and blue jump apart through the flicker's steps 24 times a second. */
+private fun spinStep(state: LogoState) = (state.time * 24f).toInt() % 3
 
-private fun copyY(state: LogoState, ink: Ink): Float =
-    if (!ink.jumps) 0f else JumpY[jumpStep(state.time)] + FlickY[flickStep(state)] * ink.flick
+private fun copyX(state: LogoState, ink: Ink): Float {
+    if (!ink.jumps) return 0f
+    val spin = if (state.spinning) FlickX[spinStep(state)] * SpinSplit * ink.flick else 0f
+    return JumpX[jumpStep(state.time)] + FlickX[flickStep(state)] * ink.flick + spin
+}
+
+private fun copyY(state: LogoState, ink: Ink): Float {
+    if (!ink.jumps) return 0f
+    val spin = if (state.spinning) FlickY[spinStep(state)] * SpinSplit * ink.flick else 0f
+    return JumpY[jumpStep(state.time)] + FlickY[flickStep(state)] * ink.flick + spin
+}
 
 /** One copy of the logo: the base and bricks over its head, the pupil inside the head, each a layer. */
 @Composable
@@ -383,6 +400,10 @@ internal class LogoGeo(w: Float, h: Float, pad: Float) {
 private const val Quarter = 1.5707964f
 private const val FullTurn = 6.2831855f
 private const val TurnSeconds = 0.5f
+/** Whole turns the head spins while it rises or sinks: fast enough to blur, and it lands on the same view. */
+private const val RiseTurns = 3f
+/** How much harder than a page flicker red and blue split while the head spins. */
+private const val SpinSplit = 1.6f
 /** The red and blue pupils sit this share of their copy's offset from the white one, tighter than the rest. */
 private const val PupilPull = 0.4f
 
