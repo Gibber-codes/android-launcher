@@ -1,5 +1,9 @@
 package codes.gibber.launcher
 
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.core.graphics.drawable.toBitmap
+
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -135,6 +139,13 @@ object NowPlaying {
     }
 
     /** The launcher's App info, where Android 13+ keeps "Allow restricted settings" in the ⋮ menu. */
+    /** Spotify's own icon from the phone, for its button; null when it isn't installed. */
+    fun spotifyIcon(context: Context): ImageBitmap? = try {
+        context.packageManager.getApplicationIcon(SPOTIFY).toBitmap(144, 144).asImageBitmap()
+    } catch (_: Exception) {
+        null
+    }
+
     /** Opens Spotify; when it isn't on the phone, its Play Store page. False if neither opened. */
     fun openSpotify(context: Context): Boolean {
         val app = context.packageManager.getLaunchIntentForPackage(SPOTIFY)
@@ -435,7 +446,7 @@ fun PlayerScreen(onClose: () -> Unit) {
                     ) { Glyph(if (t?.playing == true) Glyphs.Pause else Glyphs.Play, 26.dp, Color.White) }
                     TapGlyph(Glyphs.Next, 24.dp) { NowPlaying.press(context, KeyEvent.KEYCODE_MEDIA_NEXT) }
                 }
-                FrostButton("Open Spotify", Modifier.fillMaxWidth(), height = 40.dp) { NowPlaying.openSpotify(context) }
+                MusicButtons()
             }
 
             if (!allowed) {
@@ -451,13 +462,6 @@ fun PlayerScreen(onClose: () -> Unit) {
                         FrostButton("Open App info", Modifier.fillMaxWidth(), hi = true, height = 38.dp) { NowPlaying.openAppInfo(context) }
                     }
                 }
-            }
-
-            PlaylistsPanel()
-
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Head("Playing on")
-                SpeakersPanel()
             }
 
             BassPanel()
