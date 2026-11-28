@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
@@ -58,6 +59,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 import kotlin.math.asin
 import kotlin.math.cos
 import kotlin.math.hypot
@@ -443,12 +445,11 @@ private fun LogoCopy(geo: LogoGeo, state: LogoState, ink: Ink, glow: Boolean = f
                                 // The pupil keeps its tighter share of the head's offset as that turns.
                                 val px = e.x + (PupilPull - 1f) * (headOffX(state, ink) - ink.dx) + eyeFlickX(state, ink)
                                 val py = e.y + (PupilPull - 1f) * headOffY(state, ink) + eyeFlickY(state, ink)
-                                // Held inside the eye, so a look up or down is cut off by the lid.
-                                inLogo(geo, ink.dx) {
-                                    translate(top = -46f) {
-                                        clipPath(LogoArt.eye) {
-                                            translate(left = px + ink.dx * (PupilPull - 1f), top = py) { drawPath(LogoArt.pupil, ink.color) }
-                                        }
+                                // Shortened as it looks away, so its tips never reach further into the outline than at rest.
+                                val squash = pupilSquash(e)
+                                inLogo(geo, ink.dx * PupilPull) {
+                                    translate(left = px, top = py - 46f) {
+                                        scale(1f, squash, Offset(256f, 145.18f)) { drawPath(LogoArt.pupil, ink.color) }
                                     }
                                 }
                             }
@@ -503,9 +504,24 @@ private const val RiseTurns = 3f
 private const val SpinSplit = 1.6f
 /** The red and blue pupils sit this share of their copy's offset from the white one, tighter than the rest. */
 private const val PupilPull = 0.4f
-/** How far the pupil looks, in logo units: sideways nearly to the eye's corner, up and down well into the lid. */
-private const val LookX = 34f
-private const val LookY = 18f
+/** How far the pupil looks, in logo units: well inside the eye both ways. */
+private const val LookX = 18f
+private const val LookY = 7f
+
+/**
+ * The pupil fills the eye top to bottom, its tips just touching the outline's inner edge, so to look up or
+ * down (or sideways, where the eye narrows) it shortens until its tips sit where they do at rest.
+ */
+private fun pupilSquash(e: Offset): Float {
+    val x = min(abs(e.x), 50f)
+    // The eye's two arcs (radius 57.37, centres 19.37 above and below), less half the 18-unit outline.
+    val room = sqrt(57.37f * 57.37f - x * x) - 19.37f - 9f + PupilRestPoke
+    return ((room - abs(e.y)) / PupilHalf).coerceIn(0.5f, 1f)
+}
+
+/** The pupil's half height, and how far its tips already reach into the outline at rest. */
+private const val PupilHalf = 29.64f
+private const val PupilRestPoke = PupilHalf - (57.37f - 19.37f - 9f)
 
 /**
  * The head as a square pyramid, seen from the design's isometric camera. Its base corners sit on a
